@@ -391,6 +391,7 @@ class DrawingWindow(QMainWindow):
         frame4 = QFrame()
         frame4Layout = QVBoxLayout()
         startAnnotatingButton = QPushButton('Start Annotating')
+        startAnnotatingButton.clicked.connect(self.startAnnotating)
         changeVideoButton = QPushButton('Change Video')
         changeVideoButton.clicked.connect( self.getNewVideo )
 
@@ -512,27 +513,419 @@ class DrawingWindow(QMainWindow):
         self.label.points = []
         self.label.setPixmap(MyQPixmap('temp.png'))
 
-class QDialogTester(QMainWindow):
+    def startAnnotating(self):
+        # print('amount of labels: ', self.vBoxForScrollArea.count())
+        cutouts = []
+        for idx in range(self.vBoxForScrollArea.count()):
+            cutout = self.vBoxForScrollArea.itemAt(idx).widget().cutout
+            cutouts.append(cutout)
+        dialogWindow = AnnotationsDialog(cutouts)
+        dialogWindow.exec_()
+
+############ Testing the QDialog Window
+class ClickableCutoutViewer(QLabel):
+    pixmap = None
+    _sizeHint = QSize()
+    ratio = Qt.KeepAspectRatio
+    transformation = Qt.SmoothTransformation
+
+    def __init__(self, pixmap=None):
+        super().__init__()
+        self.setPixmap(pixmap)
+
+        self.points = []
+        self.amountOfPoints = 0
+
+
+    def setPixmap(self, pixmap):
+        if self.pixmap != pixmap:
+            self.pixmap = pixmap
+            if isinstance(pixmap, QPixmap):
+                self._sizeHint = pixmap.size()
+            else:
+                self._sizeHint = QSize()
+            self.updateGeometry()
+            self.updateScaled()
+
+    def setAspectRatio(self, ratio):
+        if self.ratio != ratio:
+            self.ratio = ratio
+            self.updateScaled()
+
+    def setTransformation(self, transformation):
+        if self.transformation != transformation:
+            self.transformation = transformation
+            self.updateScaled()
+
+    def updateScaled(self):
+        if self.pixmap:
+            self.scaled = self.pixmap.scaled(self.size(), self.ratio, self.transformation)
+        self.update()
+
+    def sizeHint(self):
+        return self._sizeHint
+
+    def resizeEvent(self, event):
+        self.updateScaled()
+
+    def paintEvent(self, event):
+        if not self.pixmap:
+            super().paintEvent(event)
+            return
+        qp = QPainter(self)
+        r = self.scaled.rect()
+        r.moveCenter(self.rect().center())
+        qp.drawPixmap(r, self.scaled)
+
+        if self.points:
+            imHeight, imWidth = self.scaled.height(), self.scaled.width()
+
+            x_offset = (self.width() - imWidth) / 2
+            y_offset = (self.height() - imHeight) / 2
+            print('drawing points')
+            # pen = QPen(Qt.red)
+            # pen.setWidth(10)
+            qp.setPen( QPen(QColor(0,0,0,0)) )
+            qp.setBrush(Qt.red)
+            for point in self.points:
+                # qp.drawPoint(int(point[0]), int( point[1]) )
+                qp.drawEllipse(int((point[0] * imWidth) + x_offset ), int( (point[1] * imHeight ) + y_offset ), 5,5)
+
+            # if self.amountOfPoints == 2:
+            #     pointsArray = np.array(self.points)
+            #     pointsArray[:, 0] = (pointsArray[:,0] * imWidth) + x_offset
+            #     pointsArray[:, 1] = (pointsArray[:,1] * imHeight) + y_offset
+            #     pointsArray = pointsArray.astype(int)
+            #
+            #     qp.setBrush(QBrush(QColor(0,0,0,0)))
+            #     qp.setPen(QPen(QColor(0,0,0,255)))
+            #     qp.drawRect(QtCore.QRect(
+            #         QtCore.QPoint(pointsArray[0,0], pointsArray[0,1]),
+            #         QtCore.QPoint(pointsArray[1,0], pointsArray[1,1]) ))
+
+    def mousePressEvent(self, ev):
+
+        # converting to position in the pixmap
+        imHeight, imWidth = self.scaled.height(), self.scaled.width()
+
+
+        x_offset = (self.width() - imWidth ) /2
+        y_offset = (self.height() - imHeight ) /2
+        y, x = ev.pos().y() - y_offset, ev.pos().x() - x_offset
+        print('x: ', x)
+        print('y: ', y)
+        # We have to check if the point is in bounds
+        if x >= 0 and x <= imWidth and y >=0  and y <= imHeight:
+            self.amountOfPoints = (self.amountOfPoints + 1) % 3
+
+            if self.amountOfPoints == 0:
+                self.points = []
+            else:
+                self.points.append([x / imWidth, y / imHeight])
+
+            self.update()
+            # if self.amountOfPoints == 2:
+            #     cv.imwrite('temp.png', self.getCutout())
+            #     self.cutoutWidget.setPixmap(QPixmap('temp.png'))
+            #     # self.cutoutWidget = ImageViewer(QPixmap('temp.png'))
+            #     # self.cutoutWidget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            #     # self.cutoutWidget.setStyleSheet('border: 2px solid black;')
+            #     # self.cutoutWidget.adjustSize()
+            #     # self.frameLayout.setRowStretch(1,1)
+            # else:
+            #     self.cutoutWidget.setPixmap(None)
+
+
+
+
+# class QDialogTester(QMainWindow):
+#
+#     def __init__(self, *args, **kwargs):
+#         super(QDialogTester, self).__init__(*args, **kwargs)
+#         self.initUI()
+#
+#     def initUI(self):
+#         self.setGeometry(300,300, 450, 450)
+#         self.show()
+#
+#         dialogWindow = QDialog(self)
+#         dialogWindow.setGeometry(300,300,550,400)
+#         dialogWindow.setWindowTitle('Annotating Window')
+#
+#         # centralWidget = QWidget()
+#         centralWidgetLayout = QVBoxLayout()
+#
+#         title = QLabel('Fish Annotations')
+#         centralWidgetLayout.addWidget(title, 0,alignment=Qt.AlignHCenter)
+#
+#         # centralWidget.setLayout(centralWidgetLayout)
+#
+#         # Creating the main window, will contain the display widget on the left and the side bar
+#         mainWidget = QWidget()
+#         mainWidgetLayout = QHBoxLayout()
+#         mainWidgetLayout.setContentsMargins(0,0,0,0)
+#         #mainWidget.setStyleSheet('border: 1px solid')
+#         # Creating the left widget
+#         leftWidget = QWidget()
+#         leftWidgetLayout = QVBoxLayout()
+#         leftWidgetLayout.setContentsMargins(0,0,0,0)
+#
+#         cutoutViewer = ClickableCutoutViewer()
+#         leftWidgetLayout.addWidget(cutoutViewer,1)
+#
+#         #   Creating the bottom bar
+#         bottomBar = QWidget()
+#         bottomBarLayout = QVBoxLayout()
+#         bottomBarLayout.setContentsMargins(0,0,0,0)
+#         #   Creating the buttons to iterate through the fish
+#         buttonsBar = QWidget()
+#         buttonsBarLayout = QHBoxLayout()
+#         buttonsBarLayout.setContentsMargins(0,0,0,0)
+#         backButton = QPushButton('Back')
+#         nextButton = QPushButton('Next')
+#         buttonsBarLayout.addWidget(backButton)
+#         buttonsBarLayout.addWidget(nextButton)
+#         buttonsBar.setLayout(buttonsBarLayout)
+#         bottomBarLayout.addWidget(buttonsBar)
+#         bottomBar.setLayout(bottomBarLayout)
+#
+#         # TODO: replace this with the amount of labels
+#         onCutoutLabel = QLabel('On Cutout 1 of ' + str(1))
+#         bottomBarLayout.addWidget(onCutoutLabel, alignment=Qt.AlignHCenter)
+#
+#         leftWidgetLayout.addWidget(bottomBar)
+#         leftWidget.setLayout(leftWidgetLayout)
+#
+#         mainWidgetLayout.addWidget(leftWidget, 2)
+#
+#         # Creating the right window
+#         rightWidget = QWidget()
+#         rightWidgetLayout = QVBoxLayout()
+#         rightWidgetLayout.setContentsMargins(0,0,0,0)
+#         # rightWidget.setStyleSheet('border: 1px solid')
+#
+#         #   Creating the top section of the right widget
+#         rightWidgetTopSection = QWidget()
+#         rightWidgetTopSectionLayout = QVBoxLayout()
+#         rightWidgetTopSectionLayout.setContentsMargins(0,0,0,0)
+#
+#         scrollAreaTitle = QLabel('Cutouts')
+#         rightWidgetTopSectionLayout.addWidget(scrollAreaTitle,0, alignment=Qt.AlignHCenter)
+#
+#         scrollArea = QScrollArea()
+#         scrollArea.setWidgetResizable(True)
+#         scrollArea.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+#         scrollAreaWidget = QWidget()
+#         scrollAreaWidgetLayout = QVBoxLayout()
+#
+#         rightWidgetTopSectionLayout.addWidget(scrollArea,1)
+#         rightWidgetTopSection.setLayout(rightWidgetTopSectionLayout)
+#         rightWidgetLayout.addWidget(rightWidgetTopSection, 2)
+#
+#         rightWidgetBottomSection = QWidget()
+#         rightWidgetBottomSectionLayout = QVBoxLayout()
+#         rightWidgetBottomSectionLayout.setContentsMargins(0,0,0,0)
+#
+#         rightWidgetBottomTopSection = QWidget()
+#         rightWidgetBottomTopSectionLayout = QVBoxLayout()
+#         rightWidgetBottomTopSectionLayout.setContentsMargins(0,0,0,0)
+#
+#         saveAnnotationButton = QPushButton('Mark Annotation')
+#         amountSavedLabel = QLabel('Annotations Saved: 0 of ' + str(90))
+#         rightWidgetBottomTopSectionLayout.addWidget(amountSavedLabel, 1)
+#         rightWidgetBottomTopSectionLayout.addWidget(saveAnnotationButton, 1)
+#         rightWidgetBottomTopSection.setLayout(rightWidgetBottomTopSectionLayout)
+#
+#         doneButton = QPushButton('Done')
+#
+#         rightWidgetBottomSectionLayout.addWidget(rightWidgetBottomTopSection, 1)
+#         rightWidgetBottomSectionLayout.addWidget(doneButton, 1)
+#
+#         rightWidgetBottomSection.setLayout(rightWidgetBottomSectionLayout)
+#
+#         #rightWidgetLayout.addWidget(scrollArea,2)
+#         rightWidgetLayout.addWidget(rightWidgetBottomSection,1)
+#
+#         #rightWidgetBottomSectionLayout.addWidget(saveAnnotationButton)
+#         #rightWidgetBottomSectionLayout.addWidget(doneButton)
+#         #rightWidgetBottomSection.setLayout(rightWidgetBottomSectionLayout)
+#
+#         #rightWidgetLayout.addWidget(rightWidgetBottomSection, 1)
+#         rightWidget.setLayout(rightWidgetLayout)
+#
+#         # rightWidget.setStyleSheet('border: 1px solid')
+#
+#         mainWidgetLayout.addWidget(rightWidget, 1)
+#
+#
+#         mainWidget.setLayout(mainWidgetLayout)
+#
+#         # mainWidget.setStyleSheet('border: 1px solid')
+#
+#         centralWidgetLayout.addWidget(mainWidget, 1)
+#
+#         dialogWindow.setLayout(centralWidgetLayout)
+#
+#
+#
+#
+#
+#
+#
+#         dialogWindow.exec_()
+
+
+class AnnotationsDialog(QDialog):
+
+    def __init__(self, cutouts,*args, **kwargs):
+        super(AnnotationsDialog, self).__init__(*args, **kwargs)
+        self.cutouts = cutouts
+        self.initUI()
+    def initUI(self):
+        self.setGeometry(300,300,550,400)
+        self.setWindowTitle('Annotating Window')
+
+        # centralWidget = QWidget()
+        centralWidgetLayout = QVBoxLayout()
+
+        title = QLabel('Fish Annotations')
+        centralWidgetLayout.addWidget(title, 0,alignment=Qt.AlignHCenter)
+
+        # centralWidget.setLayout(centralWidgetLayout)
+
+        # Creating the main window, will contain the display widget on the left and the side bar
+        mainWidget = QWidget()
+        mainWidgetLayout = QHBoxLayout()
+        mainWidgetLayout.setContentsMargins(0,0,0,0)
+        #mainWidget.setStyleSheet('border: 1px solid')
+        # Creating the left widget
+        leftWidget = QWidget()
+        leftWidgetLayout = QVBoxLayout()
+        leftWidgetLayout.setContentsMargins(0,0,0,0)
+
+        cutout0 = self.cutouts[0]
+        cv.imwrite('temp.png', cutout0)
+        cutoutViewer = ClickableCutoutViewer(QPixmap('temp.png'))
+        leftWidgetLayout.addWidget(cutoutViewer,1)
+
+        #   Creating the bottom bar
+        bottomBar = QWidget()
+        bottomBarLayout = QVBoxLayout()
+        bottomBarLayout.setContentsMargins(0,0,0,0)
+        #   Creating the buttons to iterate through the fish
+        buttonsBar = QWidget()
+        buttonsBarLayout = QHBoxLayout()
+        buttonsBarLayout.setContentsMargins(0,0,0,0)
+        backButton = QPushButton('Back')
+        nextButton = QPushButton('Next')
+        buttonsBarLayout.addWidget(backButton)
+        buttonsBarLayout.addWidget(nextButton)
+        buttonsBar.setLayout(buttonsBarLayout)
+        bottomBarLayout.addWidget(buttonsBar)
+        bottomBar.setLayout(bottomBarLayout)
+
+        # TODO: replace this with the amount of labels
+        onCutoutLabel = QLabel('On Cutout 1 of ' + str(1))
+        bottomBarLayout.addWidget(onCutoutLabel, alignment=Qt.AlignHCenter)
+
+        leftWidgetLayout.addWidget(bottomBar)
+        leftWidget.setLayout(leftWidgetLayout)
+
+        mainWidgetLayout.addWidget(leftWidget, 2)
+
+        # Creating the right window
+        rightWidget = QWidget()
+        rightWidgetLayout = QVBoxLayout()
+        rightWidgetLayout.setContentsMargins(0,0,0,0)
+        # rightWidget.setStyleSheet('border: 1px solid')
+
+        #   Creating the top section of the right widget
+        rightWidgetTopSection = QWidget()
+        rightWidgetTopSectionLayout = QVBoxLayout()
+        rightWidgetTopSectionLayout.setContentsMargins(0,0,0,0)
+
+        scrollAreaTitle = QLabel('Cutouts')
+        rightWidgetTopSectionLayout.addWidget(scrollAreaTitle,0, alignment=Qt.AlignHCenter)
+
+        scrollArea = QScrollArea()
+        scrollArea.setWidgetResizable(True)
+        scrollArea.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        scrollAreaWidget = QWidget()
+        scrollAreaWidgetLayout = QVBoxLayout()
+
+        rightWidgetTopSectionLayout.addWidget(scrollArea,1)
+        rightWidgetTopSection.setLayout(rightWidgetTopSectionLayout)
+        rightWidgetLayout.addWidget(rightWidgetTopSection, 2)
+
+        rightWidgetBottomSection = QWidget()
+        rightWidgetBottomSectionLayout = QVBoxLayout()
+        rightWidgetBottomSectionLayout.setContentsMargins(0,0,0,0)
+
+        rightWidgetBottomTopSection = QWidget()
+        rightWidgetBottomTopSectionLayout = QVBoxLayout()
+        rightWidgetBottomTopSectionLayout.setContentsMargins(0,0,0,0)
+
+        saveAnnotationButton = QPushButton('Mark Annotation')
+        amountSavedLabel = QLabel('Annotations Saved: 0 of ' + str(90))
+        rightWidgetBottomTopSectionLayout.addWidget(amountSavedLabel, 1, alignment=Qt.AlignHCenter)
+        rightWidgetBottomTopSectionLayout.addWidget(saveAnnotationButton, 1)
+        rightWidgetBottomTopSection.setLayout(rightWidgetBottomTopSectionLayout)
+
+        doneButton = QPushButton('Done')
+
+        rightWidgetBottomSectionLayout.addWidget(rightWidgetBottomTopSection, 1)
+        rightWidgetBottomSectionLayout.addWidget(doneButton, 1)
+
+        rightWidgetBottomSection.setLayout(rightWidgetBottomSectionLayout)
+
+        #rightWidgetLayout.addWidget(scrollArea,2)
+        rightWidgetLayout.addWidget(rightWidgetBottomSection,1)
+
+        #rightWidgetBottomSectionLayout.addWidget(saveAnnotationButton)
+        #rightWidgetBottomSectionLayout.addWidget(doneButton)
+        #rightWidgetBottomSection.setLayout(rightWidgetBottomSectionLayout)
+
+        #rightWidgetLayout.addWidget(rightWidgetBottomSection, 1)
+        rightWidget.setLayout(rightWidgetLayout)
+
+        # rightWidget.setStyleSheet('border: 1px solid')
+
+        mainWidgetLayout.addWidget(rightWidget, 1)
+
+
+        mainWidget.setLayout(mainWidgetLayout)
+
+        # mainWidget.setStyleSheet('border: 1px solid')
+
+        centralWidgetLayout.addWidget(mainWidget, 1)
+
+        self.setLayout(centralWidgetLayout)
+
+
+
+
+
+
+
+        # dialogWindow.exec_()
+
+class QDialogTester2(QMainWindow):
 
     def __init__(self, *args, **kwargs):
-        super(QDialogTester, self).__init__(*args, **kwargs)
+        super(QDialogTester2, self).__init__(*args, **kwargs)
         self.initUI()
 
     def initUI(self):
         self.setGeometry(300,300, 450, 450)
         self.show()
 
-        dialogWindow = QDialog(self)
-        dialogWindow.setWindowTitle('Dialog Window')
+        dialogWindow = AnnotationsDialog()
         dialogWindow.exec_()
-
-
-
 
 
 app = QApplication(sys.argv)
 ex = DrawingWindow()
-# ex = QDialogTester()
+#ex = QDialogTester2()
 # ex = predictionWindow()
 # ex = Window()
 
