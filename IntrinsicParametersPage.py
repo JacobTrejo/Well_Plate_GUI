@@ -419,7 +419,7 @@ class IntrinsicParametersPage(QWidget):
         topWidget = QWidget()
         topWidgetLayout = QGridLayout()
 
-        backButton = ImageViewer(QPixmap('Back.png'))
+        # backButton = ImageViewer(QPixmap('Back.png'))
         backButton = QLabel('back')
         backButton.mousePressEvent = self.backPressed
 
