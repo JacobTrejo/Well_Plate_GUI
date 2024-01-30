@@ -25,6 +25,25 @@ blue = '#435585'
 whiteBlue = '#818FB4'
 white = '#F5E8C7'
 
+
+firstColorName = '#012F34'
+secondColorName = '#0E484E'
+thirdColorName = '#417C81'
+fourthColorName = '#97B9BE'
+
+secondColorName = '#1F5E67'
+# thirdColorName = '#7DAAB0'
+# fourthColorName = '#CEE2E5'
+# blue = thirdColorName
+# whiteBlue = secondColorName
+# white = fourthColorName
+
+blue = secondColorName
+whiteBlue = thirdColorName
+white = fourthColorName
+# white = firstColorName
+
+
 buttonStyleSheet = \
             '''
             border: 4px solid ''' + whiteBlue + ''';
