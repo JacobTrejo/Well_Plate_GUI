@@ -711,8 +711,8 @@ class DrawingWindow(QMainWindow):
 app = QApplication(sys.argv)
 # ex = DrawingWindow()
 
-ex = predictionWindow()
-# ex = Window()
+# ex = predictionWindow()
+ex = Window()
 
 sys.exit(app.exec())
 

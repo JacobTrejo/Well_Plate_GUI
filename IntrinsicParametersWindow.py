@@ -274,9 +274,15 @@ class DrawingWindow(QMainWindow):
         super(DrawingWindow, self).__init__(*args, **kwargs)
         self.setMinimumSize(854, 510)
         self.amountOfFishSaved = 0
-        self.vidArray = np.load('vid.npy')
+
+        # self.vidArray = np.load('vid.npy')
+        # self.frameIdx = 0
+        # self.amountOfFrames = self.vidArray.shape[-1]
+
+        self.vidArray = None
         self.frameIdx = 0
-        self.amountOfFrames = self.vidArray.shape[-1]
+        self.amountOfFrames = 0
+
         self.initUI()
 
     def initUI(self):
@@ -302,7 +308,7 @@ class DrawingWindow(QMainWindow):
         # Now the actual elements
         backButton = QPushButton('Back')
         backButton.clicked.connect(self.previousFrame)
-        self.frameSelectionLabel = QLineEdit('1')
+        self.frameSelectionLabel = QLineEdit('0')
         self.frameSelectionLabel.returnPressed.connect(self.pressedReturn)
         self.frameSelectionLabel.setStyleSheet('margin: 0px')
         self.frameSelectionLabel.setContentsMargins(5,0,5,0)
@@ -318,21 +324,42 @@ class DrawingWindow(QMainWindow):
         frameSelectionBar.setLayout(frameSelectionBarLayout)
         # Adding this to the bottom bar
         bottomBarLayout.addWidget(frameSelectionBar)
-        self.onFrameLabel = QLabel('On Frame 1 of ' + str(self.amountOfFrames))
+        self.onFrameLabel = QLabel('On Frame 0 of ' + str(self.amountOfFrames))
         bottomBarLayout.addWidget(self.onFrameLabel, alignment=Qt.AlignHCenter)
         bottomBar.setLayout(bottomBarLayout)
 
+        # self.label = ClickableImageViewer(MyQPixmap('wellplate.png'))
+        self.label = ClickableImageViewer(None)
+        self.label.setText('No Video Selected')
+        self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.label = ClickableImageViewer(MyQPixmap('wellplate.png'))
+
+        # labelContainer = QWidget()
+        # labelContainer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # labelContainerLayout = QHBoxLayout()
+        # labelContainerLayout.addWidget(self.label, 1, alignment=Qt.AlignCenter)
+        # labelContainer.setLayout(labelContainerLayout)
 
         leftWidget = QWidget()
+        # leftWidget.setStyleSheet('border: 1 px solid')
         leftWidgetLayout = QVBoxLayout()
+        # leftWidget.setStyleSheet('border: 1px solid')
+
+        # leftWidgetLayout = QGridLayout()
         leftWidgetLayout.addWidget(self.label,1)
-        leftWidgetLayout.addWidget(bottomBar, 0)
-        leftWidget.setLayout(leftWidgetLayout)
-        # leftWidget.setStyleSheet('border: 1px solid black')
+        leftWidgetLayout.setStretch(0,1)
+        # leftWidgetLayout.addWidget(self.label, 0,0)
+        # leftWidgetLayout.addWidget(labelContainer,1)
+        leftWidgetLayout.addWidget(bottomBar, 0, alignment=Qt.AlignBottom)
+
+        # leftWidgetLayout.addWidget(bottomBar, 1, 0, 0, 1)
+        # leftWidgetLayout.setRowStretch(1,1)
+
         leftWidgetLayout.setContentsMargins(0,0,0,0)
         leftWidgetLayout.setSpacing(20)
+        leftWidget.setLayout(leftWidgetLayout)
+        # leftWidget.setStyleSheet('border: 1px solid black')
+
         print( leftWidgetLayout.getContentsMargins() )
         # Preparing the main widget, the display and the side bar
 
@@ -407,6 +434,7 @@ class DrawingWindow(QMainWindow):
         sideBar.setLayout(sideBarLayout)
 
         mainWidget = QWidget()
+        # mainWidget.setStyleSheet('border: 1px solid')
         mainWidgetLayout = QHBoxLayout()
         # mainWidgetLayout.addWidget(self.label, 200)
         mainWidgetLayout.addWidget(leftWidget, 130)
@@ -440,7 +468,7 @@ class DrawingWindow(QMainWindow):
         dlg.setFileMode(QFileDialog.AnyFile)
         dlg.exec_()
         filenames = dlg.selectedFiles()
-        if len(filenames):
+        if filenames:
             self.vidArray = np.load(filenames[0])
             self.frameIdx = 0
             self.amountOfFrames = self.vidArray.shape[-1]
@@ -497,14 +525,17 @@ class DrawingWindow(QMainWindow):
             self.changeFrame()
 
     def nextFrame(self):
+        if self.amountOfFrames == 0 or self.amountOfFrames == 1: return
         self.frameIdx = (self.frameIdx + 1) % self.amountOfFrames
         self.changeFrame()
 
     def previousFrame(self):
+        if self.amountOfFrames == 0 or self.amountOfFrames == 1: return
         self.frameIdx = (self.frameIdx - 1) % self.amountOfFrames
         self.changeFrame()
 
     def changeFrame(self):
+        if self.amountOfFrames == 0 or self.amountOfFrames == 1: return
         self.onFrameLabel.setText('On Frame ' + str(self.frameIdx + 1) + ' of ' + str(self.amountOfFrames))
         self.frameSelectionLabel.setText(str(self.frameIdx + 1))
         frame = self.vidArray[..., self.frameIdx]
@@ -582,12 +613,13 @@ class ClickableCutoutViewer(QLabel):
 
             x_offset = (self.width() - imWidth) / 2
             y_offset = (self.height() - imHeight) / 2
-            print('drawing points')
+            # print('drawing points')
             # pen = QPen(Qt.red)
             # pen.setWidth(10)
             qp.setPen( QPen(QColor(0,0,0,0)) )
-            qp.setBrush(Qt.red)
-            for point in self.points:
+            qp.setBrush(Qt.cyan)
+            for pointIdx, point in enumerate(self.points):
+                if pointIdx == 1: qp.setBrush(Qt.red)
                 # qp.drawPoint(int(point[0]), int( point[1]) )
                 qp.drawEllipse(int((point[0] * imWidth) + x_offset ), int( (point[1] * imHeight ) + y_offset ), 5,5)
 
@@ -780,7 +812,25 @@ class AnnotationsDialog(QDialog):
     def __init__(self, cutouts,*args, **kwargs):
         super(AnnotationsDialog, self).__init__(*args, **kwargs)
         self.cutouts = cutouts
+        self.amountOfCutouts = len(cutouts)
+
         self.initUI()
+        # The following array will be used to quickly get a count of how many fish have been annotated
+        self.annotationArray = np.zeros((len(cutouts)))
+
+        for fishIdx, cutout in enumerate(cutouts):
+            label = AnnotationsLabel(cutout, 'Fish ' + str(fishIdx + 1) )
+            label.mousePressEvent = \
+                functools.partial( self.annotationLabelPressed, label)
+            #labels.append(labels)
+            self.scrollAreaWidgetLayout.addWidget(label)
+            # self.scrollAreaWidgetLayout.setStretch(fishIdx, 0)
+        self.previousAnnotationLabel = self.scrollAreaWidgetLayout.itemAt(0).widget()
+        self.previousAnnotationLabel.setStyleSheet('background: blue')
+        # spacer = QWidget()
+        # self.scrollAreaWidgetLayout.addWidget(spacer, 1)
+        #self.scrollAreaWidgetLayout.setSpacing(0)
+        # self.scrollAreaWidgetLayout.setStretchFactor(0)
     def initUI(self):
         self.setGeometry(300,300,550,400)
         self.setWindowTitle('Annotating Window')
@@ -805,8 +855,9 @@ class AnnotationsDialog(QDialog):
 
         cutout0 = self.cutouts[0]
         cv.imwrite('temp.png', cutout0)
-        cutoutViewer = ClickableCutoutViewer(QPixmap('temp.png'))
-        leftWidgetLayout.addWidget(cutoutViewer,1)
+        self.cutoutViewer = ClickableCutoutViewer(QPixmap('temp.png'))
+        AnnotationsLabel.imageViewer = self.cutoutViewer
+        leftWidgetLayout.addWidget(self.cutoutViewer,1)
 
         #   Creating the bottom bar
         bottomBar = QWidget()
@@ -817,7 +868,9 @@ class AnnotationsDialog(QDialog):
         buttonsBarLayout = QHBoxLayout()
         buttonsBarLayout.setContentsMargins(0,0,0,0)
         backButton = QPushButton('Back')
+        backButton.clicked.connect(self.backButtonPressed)
         nextButton = QPushButton('Next')
+        nextButton.clicked.connect(self.nextButtonPressed)
         buttonsBarLayout.addWidget(backButton)
         buttonsBarLayout.addWidget(nextButton)
         buttonsBar.setLayout(buttonsBarLayout)
@@ -825,8 +878,8 @@ class AnnotationsDialog(QDialog):
         bottomBar.setLayout(bottomBarLayout)
 
         # TODO: replace this with the amount of labels
-        onCutoutLabel = QLabel('On Cutout 1 of ' + str(1))
-        bottomBarLayout.addWidget(onCutoutLabel, alignment=Qt.AlignHCenter)
+        self.onCutoutLabel = QLabel('On Cutout 1 of ' + str(self.amountOfCutouts))
+        bottomBarLayout.addWidget(self.onCutoutLabel, alignment=Qt.AlignHCenter)
 
         leftWidgetLayout.addWidget(bottomBar)
         leftWidget.setLayout(leftWidgetLayout)
@@ -851,7 +904,14 @@ class AnnotationsDialog(QDialog):
         scrollArea.setWidgetResizable(True)
         scrollArea.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         scrollAreaWidget = QWidget()
-        scrollAreaWidgetLayout = QVBoxLayout()
+        scrollAreaWidget.setStyleSheet('border: 1px solid')
+        self.scrollAreaWidgetLayout = QVBoxLayout()
+        self.scrollAreaWidgetLayout.setContentsMargins(0,0,0,0)
+        self.scrollAreaWidgetLayout.setSpacing(0)
+
+        scrollAreaWidget.setLayout(self.scrollAreaWidgetLayout)
+        scrollArea.setWidget(scrollAreaWidget)
+        # scrollArea.setWidget()
 
         rightWidgetTopSectionLayout.addWidget(scrollArea,1)
         rightWidgetTopSection.setLayout(rightWidgetTopSectionLayout)
@@ -866,8 +926,9 @@ class AnnotationsDialog(QDialog):
         rightWidgetBottomTopSectionLayout.setContentsMargins(0,0,0,0)
 
         saveAnnotationButton = QPushButton('Mark Annotation')
-        amountSavedLabel = QLabel('Annotations Saved: 0 of ' + str(90))
-        rightWidgetBottomTopSectionLayout.addWidget(amountSavedLabel, 1, alignment=Qt.AlignHCenter)
+        saveAnnotationButton.clicked.connect(self.markAnnotationsPressed)
+        self.amountSavedLabel = QLabel('Annotations Saved: 0 of ' + str(self.amountOfCutouts))
+        rightWidgetBottomTopSectionLayout.addWidget(self.amountSavedLabel, 1, alignment=Qt.AlignHCenter)
         rightWidgetBottomTopSectionLayout.addWidget(saveAnnotationButton, 1)
         rightWidgetBottomTopSection.setLayout(rightWidgetBottomTopSectionLayout)
 
@@ -901,13 +962,67 @@ class AnnotationsDialog(QDialog):
 
         self.setLayout(centralWidgetLayout)
 
-
-
-
-
-
-
         # dialogWindow.exec_()
+
+    def annotationLabelPressed(self, label, event):
+
+        idxOfLabel = int(label.text().split(' ')[-1]) - 1
+        self.onCutoutLabel.setText('On Cutout ' + str(idxOfLabel + 1) + ' of ' + str(self.amountOfCutouts))
+
+        if self.previousAnnotationLabel:
+            styleSheet = ''
+            if self.previousAnnotationLabel.markedPoints:
+                styleSheet = 'background: green'
+            self.previousAnnotationLabel.setStyleSheet(styleSheet)
+
+        label.setStyleSheet('background: blue')
+        cv.imwrite('temp.png', label.cutout)
+
+
+        self.cutoutViewer.setPixmap(QPixmap('temp.png'))
+        if label.markedPoints:
+            print('the label had marked points')
+            self.cutoutViewer.amountOfPoints = 2
+            self.cutoutViewer.points = label.markedPoints
+        else:
+            self.cutoutViewer.amountOfPoints = 0
+            self.cutoutViewer.points = []
+
+        # self.cutoutViewer.setPixmap(QPixmap('temp.png'))
+
+        self.previousAnnotationLabel = label
+
+    def markAnnotationsPressed(self):
+        if not self.previousAnnotationLabel: return
+        if self.cutoutViewer.amountOfPoints < 2: return
+        idxOfLabel = int(self.previousAnnotationLabel.text().split(' ')[-1]) - 1
+        self.annotationArray[idxOfLabel] = 1
+        amountOfAnnotations = np.count_nonzero(self.annotationArray)
+        self.amountSavedLabel.setText('Annotations Saved: ' + str(amountOfAnnotations) + ' of ' + str(self.amountOfCutouts))
+        self.previousAnnotationLabel.markedPoints = self.cutoutViewer.points
+
+
+    def backButtonPressed(self):
+        idxOfLabel = int(self.previousAnnotationLabel.text().split(' ')[-1]) - 1
+        label = self.scrollAreaWidgetLayout.itemAt((idxOfLabel - 1) % self.amountOfCutouts).widget()
+        self.annotationLabelPressed(label, None)
+
+    def nextButtonPressed(self):
+        idxOfLabel = int(self.previousAnnotationLabel.text().split(' ')[-1]) - 1
+        label = self.scrollAreaWidgetLayout.itemAt( (idxOfLabel + 1) % self.amountOfCutouts).widget()
+        self.annotationLabelPressed(label, None)
+
+class AnnotationsLabel(QLabel):
+
+    imageViewer = None
+
+    def __init__(self, cutout, *args, **kwargs):
+        super(AnnotationsLabel, self).__init__(*args, **kwargs)
+        self.markedPoints = None
+        self.cutout = cutout
+
+
+
 
 class QDialogTester2(QMainWindow):
 
