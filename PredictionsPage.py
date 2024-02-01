@@ -1,5 +1,6 @@
 from Auxilary import *
 from VideoPlayer3 import Widget
+from PyQt5 import QtCore, QtGui
 
 class ImageViewer(QLabel):
     pixmap = None
@@ -81,6 +82,9 @@ class PredictionPage(QWidget):
     def __init__(self, *args, **kwargs):
         super(PredictionPage, self).__init__(*args, **kwargs)
 
+        # Temp ?
+        self.drawingItems = []
+
         self.videoList = []
         self.selectedPath = []
 
@@ -134,6 +138,7 @@ class PredictionPage(QWidget):
         titleLabel2.setStyleSheet('border: 0px')
         titleLabel2.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.gridLabel = QLabel('No Grid Selected')
+        self.gridLabel.mousePressEvent = self.pressedGridLabel
         self.gridLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.gridLabel.setStyleSheet('color: ' + firstColorName)
         # self.gridLabel.mousePressEvent = self.pressed
@@ -354,6 +359,7 @@ class PredictionPage(QWidget):
         if len(filenames):
             splitText = filenames[0].split('/')
             self.gridLabel.setText(splitText[-1])
+            self.gridPath = filenames[0]
 
     def pressed(self,*arg, **kwargs):
         print('You pressed me')
@@ -364,6 +370,27 @@ class PredictionPage(QWidget):
         self.widget.initializePlayer(path)
         self.widget.ready = True
         self.widget.play()
+
+    def pressedGridLabel(self, event):
+        if len(self.drawingItems) > 0:
+            for item in self.drawingItems:
+                self.widget._scene.removeItem(item)
+            self.drawingItems = []
+            return
+
+        print('You pressed the grid label')
+        grid = np.load(self.gridPath)
+        newWidth = self.widget.newWidth
+        grid *= newWidth
+        for circle in grid:
+            x, y, r = circle
+            diameter = 2 * r
+
+            ellipse_item = QtWidgets.QGraphicsEllipseItem((x) - (diameter / 2),
+                                                                (y) - (diameter / 2), diameter, diameter)
+            ellipse_item.setPen(QtGui.QPen(QtCore.Qt.red))
+            self.drawingItems.append(ellipse_item)
+            self.widget._scene.addItem(ellipse_item)
 
     def pressedBack(self, event):
         self.parent().parent().backPressed()

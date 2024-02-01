@@ -130,6 +130,8 @@ class Widget(QtWidgets.QWidget):
 
         # This was temp added
         newWidth, newHeight = calculateMaximumSize((self.width, self.height), (self.size().width(), self.size().height()))
+        self.newWidth = newWidth
+
         self._videoitem.setSize(QtCore.QSizeF(newWidth, newHeight))
         self._gv.resize(int(newWidth), int(newHeight))
         self._gv.setMinimumWidth(int(0))
@@ -140,6 +142,18 @@ class Widget(QtWidgets.QWidget):
         # self._scene.setSceneRect(QtCore.QRectF(0, -30, newWidth, newHeight))
         sceneRectOffset = (self.size().height()) / 2
 
+        # # Drawing the grid
+        # grid = np.load('grids/testingGrid.npy')
+        # grid *= newWidth
+        #
+        # for circle in grid:
+        #     x, y, r = circle
+        #     diameter = 2 * r
+        #     self._ellipse_item = QtWidgets.QGraphicsEllipseItem((x) - (diameter / 2),
+        #                                                         (y) - (diameter / 2), diameter, diameter)
+        #
+        #     self._scene.addItem(self._ellipse_item)
+
         self._scene.setSceneRect(QtCore.QRectF(0, 0, self.size().width(), self.size().height()))
 
 
@@ -149,6 +163,7 @@ class Widget(QtWidgets.QWidget):
         # size = QtCore.QSizeF(800, 500)
 
         newWidth, newHeight = calculateMaximumSize((self.width, self.height), (a0.size().width(), a0.size().height()))
+        self.newWidth = newWidth
         self._videoitem.setSize(QtCore.QSizeF(newWidth, newHeight))
         self._gv.resize(int(newWidth), int(newHeight))
         self._gv.setMinimumWidth(int(0))
@@ -163,15 +178,17 @@ class Widget(QtWidgets.QWidget):
 
 
 
-        # # The following are for drawing
+        # The following are for drawing
         # self._scene.removeItem(self._ellipse_item)
+
         # diameter = 40
         # self._ellipse_item = QtWidgets.QGraphicsEllipseItem((.5 * newWidth) - (diameter / 2),
         #                                                     (.5 * newHeight) - (diameter / 2), diameter, diameter)
-        # self._scene.addItem(self._ellipse_item)
         #
-        # print('widget height: ', a0.size().height())
-        # print('scene height: ', newHeight)
+        # self._scene.addItem(self._ellipse_item)
+
+        print('widget height: ', a0.size().height())
+        print('scene height: ', newHeight)
 
 
 
