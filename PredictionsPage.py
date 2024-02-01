@@ -1,4 +1,5 @@
 from Auxilary import *
+from VideoPlayer3 import Widget
 
 class ImageViewer(QLabel):
     pixmap = None
@@ -63,6 +64,17 @@ class TitleLabel(QLabel):
         font = self.font()
         font.setPixelSize( int( self.height() * .7))
         self.setFont(font)
+
+class DrawingWidget(QLabel):
+
+    def __init__(self, *args, **kwargs):
+        super(DrawingWidget, self).__init__(*args, **kwargs)
+
+    def paintEvent(self, event):
+        qp = QPainter(self)
+        qp.setPen(Qt.magenta)
+        center = QtCore.QPoint(0, 0)
+        qp.drawEllipse(center, 10, 10)
 
 class PredictionPage(QWidget):
 
@@ -203,15 +215,39 @@ class PredictionPage(QWidget):
         # label.setPixmap(QPixmap('wellplate.png'))
 
         # print(label.size())
+        leftWidget = QWidget()
+        leftWidgetLayout = QGridLayout()
+        leftWidgetLayout.setContentsMargins(0,0,0,0)
+
         self.label.setStyleSheet('border: 1px solid black;' +
                                  'color: white;')
-        # self.label.setText('No Video Selected')
+        self.label.setText('No Video Selected')
         self.label.setStyleSheet('border: 1px solid')
         self.label.setAlignment(Qt.AlignCenter)
-        self.label.show()
+
+        drawingWidget = DrawingWidget()
+        # NOTE: We are testing the widget here
+        self.widget = Widget()
+        # tempWidget = QWidget()
+        # tempWidgetLayout = QHBoxLayout()
+        # tempLeftSpacer = QWidget()
+        # tempRightSpacer = QWidget()
+        # tempWidgetLayout.addWidget(tempLeftSpacer, 0)
+        # tempWidgetLayout.addWidget(self.widget, 1)
+        # tempWidgetLayout.addWidget(tempRightSpacer, 0)
+        # tempWidget.setLayout(tempWidgetLayout)
+
+        leftWidgetLayout.addWidget(drawingWidget, 0, 0, 1, 1)
+        leftWidgetLayout.addWidget(self.label, 0, 0, 1, 1)
+        leftWidgetLayout.addWidget(self.widget, 0, 0, 1, 1)
+
+        leftWidget.setLayout(leftWidgetLayout)
+        leftWidget.setStyleSheet('border: 1px solid black')
+        # self.label.show()
+
         # self.label.adjustSize()
         mainLayout = QHBoxLayout()
-        mainLayout.addWidget(self.label)
+        mainLayout.addWidget(leftWidget)
         mainLayout.addWidget(rightWidget)
 
         mainLayout.setStretch(0, 200)
@@ -324,7 +360,10 @@ class PredictionPage(QWidget):
         return
 
     def pressedScrollLabel(self, event, path=None):
-        self.label.setPixmap(QPixmap( path ))
+        # self.label.setPixmap(QPixmap( path ))
+        self.widget.initializePlayer(path)
+        self.widget.ready = True
+        self.widget.play()
 
     def pressedBack(self, event):
         self.parent().parent().backPressed()

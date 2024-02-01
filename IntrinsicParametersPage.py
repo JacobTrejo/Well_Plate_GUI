@@ -820,6 +820,7 @@ class AnnotationsDialog(QDialog):
         #self.scrollAreaWidgetLayout.setSpacing(0)
         # self.scrollAreaWidgetLayout.setStretchFactor(0)
     def initUI(self):
+        self.setStyleSheet('background: ' + blue)
         self.setGeometry(300,300,550,400)
         self.setWindowTitle('Annotating Window')
 
@@ -915,13 +916,14 @@ class AnnotationsDialog(QDialog):
 
         saveAnnotationButton = QPushButton('Mark Annotation')
         saveAnnotationButton.clicked.connect(self.markAnnotationsPressed)
+        saveAnnotationButton.setStyleSheet(smallerButtonStyleSheet)
         self.amountSavedLabel = QLabel('Annotations Saved: 0 of ' + str(self.amountOfCutouts))
         rightWidgetBottomTopSectionLayout.addWidget(self.amountSavedLabel, 1, alignment=Qt.AlignHCenter)
         rightWidgetBottomTopSectionLayout.addWidget(saveAnnotationButton, 1)
         rightWidgetBottomTopSection.setLayout(rightWidgetBottomTopSectionLayout)
 
         doneButton = QPushButton('Done')
-
+        doneButton.setStyleSheet(smallerButtonStyleSheet)
         rightWidgetBottomSectionLayout.addWidget(rightWidgetBottomTopSection, 1)
         rightWidgetBottomSectionLayout.addWidget(doneButton, 1)
 
