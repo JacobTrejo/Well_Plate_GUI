@@ -1,5 +1,6 @@
 from Auxilary import *
-from VideoPlayer3 import Widget
+# from VideoPlayer3 import Widget
+from VideoPlayer5 import Widget
 from PyQt5 import QtCore, QtGui
 
 class ImageViewer(QLabel):
@@ -221,9 +222,10 @@ class PredictionPage(QWidget):
 
         # print(label.size())
         leftWidget = QWidget()
-        leftWidgetLayout = QGridLayout()
+        # leftWidgetLayout = QGridLayout()
+        leftWidgetLayout = QVBoxLayout()
         leftWidgetLayout.setContentsMargins(0,0,0,0)
-
+        leftWidgetLayout.setSpacing(0)
         self.label.setStyleSheet('border: 1px solid black;' +
                                  'color: white;')
         self.label.setText('No Video Selected')
@@ -242,9 +244,23 @@ class PredictionPage(QWidget):
         # tempWidgetLayout.addWidget(tempRightSpacer, 0)
         # tempWidget.setLayout(tempWidgetLayout)
 
-        leftWidgetLayout.addWidget(drawingWidget, 0, 0, 1, 1)
-        leftWidgetLayout.addWidget(self.label, 0, 0, 1, 1)
-        leftWidgetLayout.addWidget(self.widget, 0, 0, 1, 1)
+        # leftWidgetLayout.addWidget(drawingWidget, 0, 0, 1, 1)
+        # leftWidgetLayout.addWidget(self.label, 0, 0, 1, 1)
+        leftWidgetLayout.addWidget(self.widget, 1)
+
+        leftWidgetBottomBar = QWidget()
+        leftWidgetBottomBar.setStyleSheet('')
+        leftWidgetBottomBarLayout = QHBoxLayout()
+        leftWidgetBottomBar.setContentsMargins(0,0,0,0)
+        playButton = QPushButton('play')
+        playButton.clicked.connect(self.widget.toggledPlay)
+        slider = QSlider(Qt.Horizontal)
+        self.widget.connectSlider(slider)
+        leftWidgetBottomBarLayout.addWidget(playButton)
+        leftWidgetBottomBarLayout.addWidget(slider)
+        leftWidgetBottomBar.setLayout(leftWidgetBottomBarLayout)
+
+        leftWidgetLayout.addWidget(leftWidgetBottomBar, 0)
 
         leftWidget.setLayout(leftWidgetLayout)
         leftWidget.setStyleSheet('border: 1px solid black')
@@ -369,7 +385,7 @@ class PredictionPage(QWidget):
         # self.label.setPixmap(QPixmap( path ))
         self.widget.initializePlayer(path)
         self.widget.ready = True
-        self.widget.play()
+        # self.widget.play()
 
     def pressedGridLabel(self, event):
         if len(self.drawingItems) > 0:

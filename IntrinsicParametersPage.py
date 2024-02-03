@@ -1,4 +1,6 @@
 from Auxilary import *
+import os
+from videoFileExtensions import isVideoFile
 
 class TitleLabel(QLabel):
     def __init__(self, *args, **kwargs):
@@ -227,6 +229,59 @@ class ClickableImageViewer(QLabel):
 
         return self.pixmap.arr[sy: by + 1,sx: bx + 1]
 
+class Video:
+    """
+        A class to make is easier to handle when videos are actual videos vs folders with pictures
+    """
+    # Video types
+    actualVideo = 'actualVideo'
+    folderVideo = 'folderVideo'
+    # initially the type is NONE
+
+    def __init__(self):
+        self.isVideoLoaded = False
+        self.videoType = None
+        self.video = None
+        self.amountOfFrames = None
+        self.url = None
+    def setVideo(self, url):
+        wasItLoadedSuccesfully = False
+
+        # let's check what it is
+        if isVideoFile(url):
+            # let's assume it actually is a video
+            try:
+                self.video = cv.VideoCapture(url)
+                self.amountOfFrames = int(self.video.get(cv.CAP_PROP_FRAME_COUNT))
+                self.videoType = Video.actualVideo
+                self.url = url
+                wasItLoadedSuccesfully = True
+            except:
+                wasItLoadedSuccesfully = False
+        elif os.path.isdir(url):
+            self.video = os.listdir(url)
+            self.video.sort()
+            try:
+                cv.imread(url + self.video[0])
+                self.amountOfFrames = len(self.video)
+                self.videoType = Video.folderVideo
+                self.url = url
+                wasItLoadedSuccesfully = True
+            except:
+                wasItLoadedSuccesfully = False
+        # NOTE: you might want to send a message if it was not loaded successfully
+    def getFrame(self, frameIdx):
+
+        if self.videoType == Video.actualVideo:
+            self.video.set(cv.CAP_PROP_POS_FRAMES, frameIdx)
+            ret, frame = self.video.read()
+            return frame
+
+        elif self.videoType == Video.folderVideo:
+            filename = self.url + '/' + self.video[frameIdx]
+            frame = cv.imread(filename)
+            return frame
+
 class IntrinsicParametersPage(QWidget):
     def __init__(self, *args, **kwargs):
         super(IntrinsicParametersPage, self).__init__(*args, **kwargs)
@@ -236,6 +291,9 @@ class IntrinsicParametersPage(QWidget):
         # self.vidArray = np.load('vid.npy')
         # self.frameIdx = 0
         # self.amountOfFrames = self.vidArray.shape[-1]
+
+        # Video object to handle the different formats of video
+        self.video = Video()
 
         self.vidArray = None
         self.frameIdx = 0
@@ -454,9 +512,17 @@ class IntrinsicParametersPage(QWidget):
         dlg.exec_()
         filenames = dlg.selectedFiles()
         if filenames:
-            self.vidArray = np.load(filenames[0])
+            # Checking what type the file is
+            filename = filenames[0]
+            if os.path.isfile(filename):
+                print('You loaded a file')
+            elif os.path.isdir(filename):
+                print('You loaded a folder')
+            self.video.setVideo(filename)
+            # self.vidArray = np.load(filenames[0])
             self.frameIdx = 0
-            self.amountOfFrames = self.vidArray.shape[-1]
+            # self.amountOfFrames = self.vidArray.shape[-1]
+            self.amountOfFrames = self.video.amountOfFrames
             self.changeFrame()
             self.cutOutWidget.setPixmap(None)
             self.label.amountOfPoints = 0
@@ -523,7 +589,8 @@ class IntrinsicParametersPage(QWidget):
         if self.amountOfFrames == 0 or self.amountOfFrames == 1: return
         self.onFrameLabel.setText('On Frame ' + str(self.frameIdx + 1) + ' of ' + str(self.amountOfFrames))
         self.frameSelectionLabel.setText(str(self.frameIdx + 1))
-        frame = self.vidArray[..., self.frameIdx]
+        frame = self.video.getFrame(self.frameIdx)
+        # frame = self.vidArray[..., self.frameIdx]
         cv.imwrite('temp.png', frame)
         self.label.amountOfPoints = 0
         self.label.points = []
