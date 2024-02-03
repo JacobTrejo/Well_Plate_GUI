@@ -26,7 +26,15 @@ class FishLabel(QLabel):
         super(FishLabel, self).__init__(*args, **kwargs)
         self.idx = FishLabel.counter
         self.cutout = None
+        # Information about the label, usefull for bgsub
+        self.url = None
+        self.frameIdx = None
+        self.crops = None # sy, by, sx, bx
+
         FishLabel.counter += 1
+    @ property
+    def bgsubInfo(self):
+        return (self.url, self.frameIdx, self.crops)
 
 class ImageWidget(QLabel):
 
@@ -206,7 +214,7 @@ class ClickableImageViewer(QLabel):
 
             self.update()
             if self.amountOfPoints == 2:
-                cv.imwrite('temp.png', self.getCutout())
+                cv.imwrite('temp.png', self.getCutout()[0])
                 self.cutoutWidget.setPixmap(QPixmap('temp.png'))
                 # self.cutoutWidget = ImageViewer(QPixmap('temp.png'))
                 # self.cutoutWidget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -227,7 +235,7 @@ class ClickableImageViewer(QLabel):
         sx, bx = min(pointsArray[:,0]), max(pointsArray[:,0])
         sy, by = min(pointsArray[:,1]), max(pointsArray[:,1])
 
-        return self.pixmap.arr[sy: by + 1,sx: bx + 1]
+        return self.pixmap.arr[sy: by + 1,sx: bx + 1], [sy, by, sx, bx]
 
 class Video:
     """
@@ -530,9 +538,13 @@ class IntrinsicParametersPage(QWidget):
     def pressedSaveFish(self):
         if self.label.amountOfPoints == 2:
             self.amountOfFishSaved += 1
-            cutout = self.label.getCutout()
+            cutout, crops = self.label.getCutout()
             fishLabel = FishLabel('Fish ' + str(self.amountOfFishSaved))
             fishLabel.cutout = cutout
+            # adding the information for bgsub
+            fishLabel.frameIdx = self.frameIdx
+            fishLabel.url = self.video.url
+            fishLabel.crops = crops
             print(fishLabel.idx)
             fishLabel.mousePressEvent = \
                 functools.partial(self.pressedSavedLabel,fishLabel)
@@ -599,10 +611,13 @@ class IntrinsicParametersPage(QWidget):
     def startAnnotating(self):
         # print('amount of labels: ', self.vBoxForScrollArea.count())
         cutouts = []
+        bgsubInfoList = []
         for idx in range(self.vBoxForScrollArea.count()):
             cutout = self.vBoxForScrollArea.itemAt(idx).widget().cutout
+            bgsubInfo = self.vBoxForScrollArea.itemAt(idx).widget().bgsubInfo
             cutouts.append(cutout)
-        dialogWindow = AnnotationsDialog(cutouts)
+            bgsubInfoList.append(bgsubInfo)
+        dialogWindow = AnnotationsDialog(cutouts, bgsubInfoList)
         dialogWindow.exec_()
 
     def backPressed(self, ev):
@@ -864,7 +879,7 @@ class ClickableCutoutViewer(QLabel):
 
 class AnnotationsDialog(QDialog):
 
-    def __init__(self, cutouts,*args, **kwargs):
+    def __init__(self, cutouts, bgsubInfoList,*args, **kwargs):
         super(AnnotationsDialog, self).__init__(*args, **kwargs)
         self.cutouts = cutouts
         self.amountOfCutouts = len(cutouts)
@@ -874,7 +889,7 @@ class AnnotationsDialog(QDialog):
         self.annotationArray = np.zeros((len(cutouts)))
 
         for fishIdx, cutout in enumerate(cutouts):
-            label = AnnotationsLabel(cutout, 'Fish ' + str(fishIdx + 1) )
+            label = AnnotationsLabel(cutout, bgsubInfoList[fishIdx],'Fish ' + str(fishIdx + 1) )
             label.mousePressEvent = \
                 functools.partial( self.annotationLabelPressed, label)
             #labels.append(labels)
@@ -990,6 +1005,7 @@ class AnnotationsDialog(QDialog):
         rightWidgetBottomTopSection.setLayout(rightWidgetBottomTopSectionLayout)
 
         doneButton = QPushButton('Done')
+        doneButton.clicked.connect(self.done)
         doneButton.setStyleSheet(smallerButtonStyleSheet)
         rightWidgetBottomSectionLayout.addWidget(rightWidgetBottomTopSection, 1)
         rightWidgetBottomSectionLayout.addWidget(doneButton, 1)
@@ -1049,6 +1065,26 @@ class AnnotationsDialog(QDialog):
 
         self.previousAnnotationLabel = label
 
+    def done(self):
+        if np.count_nonzero(self.annotationArray) < self.amountOfCutouts: return
+
+        amountOfLabels = self.scrollAreaWidgetLayout.count()
+        videos = []
+        videoNames = []
+        for labelIdx in range(amountOfLabels):
+            bgsubInfo = self.scrollAreaWidgetLayout.itemAt(labelIdx).widget().bgsubInfo
+            points = self.scrollAreaWidgetLayout.itemAt(labelIdx).widget().markedPoints
+            videoName = bgsubInfo[0]
+            if videoName not in videoNames:
+                videoNames.append(videoName)
+                videos.append([(*bgsubInfo,points)])
+            else:
+                idx = videoName.index(videoName)
+                videos[idx].append((*bgsubInfo, points))
+        for vid in videos:
+            print(vid)
+            print('\n')
+
     def markAnnotationsPressed(self):
         if not self.previousAnnotationLabel: return
         if self.cutoutViewer.amountOfPoints < 2: return
@@ -1073,10 +1109,11 @@ class AnnotationsLabel(QLabel):
 
     imageViewer = None
 
-    def __init__(self, cutout, *args, **kwargs):
+    def __init__(self, cutout, bgsubInfo, *args, **kwargs):
         super(AnnotationsLabel, self).__init__(*args, **kwargs)
         self.markedPoints = None
         self.cutout = cutout
+        self.bgsubInfo = bgsubInfo
 
 if __name__ == '__main__':
     from Testing import *
