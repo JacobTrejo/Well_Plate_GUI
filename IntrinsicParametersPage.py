@@ -1,6 +1,9 @@
+import cv2
+
 from Auxilary import *
 import os
 from videoFileExtensions import isVideoFile
+from bgsub import *
 
 class TitleLabel(QLabel):
     def __init__(self, *args, **kwargs):
@@ -714,8 +717,8 @@ class ClickableCutoutViewer(QLabel):
         x_offset = (self.width() - imWidth ) /2
         y_offset = (self.height() - imHeight ) /2
         y, x = ev.pos().y() - y_offset, ev.pos().x() - x_offset
-        print('x: ', x)
-        print('y: ', y)
+        # print('x: ', x)
+        # print('y: ', y)
         # We have to check if the point is in bounds
         if x >= 0 and x <= imWidth and y >=0  and y <= imHeight:
             self.amountOfPoints = (self.amountOfPoints + 1) % 3
@@ -883,7 +886,7 @@ class AnnotationsDialog(QDialog):
         super(AnnotationsDialog, self).__init__(*args, **kwargs)
         self.cutouts = cutouts
         self.amountOfCutouts = len(cutouts)
-
+        self.amountOfDataPutInCutOutData = 0
         self.initUI()
         # The following array will be used to quickly get a count of how many fish have been annotated
         self.annotationArray = np.zeros((len(cutouts)))
@@ -1005,7 +1008,7 @@ class AnnotationsDialog(QDialog):
         rightWidgetBottomTopSection.setLayout(rightWidgetBottomTopSectionLayout)
 
         doneButton = QPushButton('Done')
-        doneButton.clicked.connect(self.done)
+        doneButton.clicked.connect(self.doneFunction)
         doneButton.setStyleSheet(smallerButtonStyleSheet)
         rightWidgetBottomSectionLayout.addWidget(rightWidgetBottomTopSection, 1)
         rightWidgetBottomSectionLayout.addWidget(doneButton, 1)
@@ -1065,7 +1068,7 @@ class AnnotationsDialog(QDialog):
 
         self.previousAnnotationLabel = label
 
-    def done(self):
+    def doneFunction(self):
         if np.count_nonzero(self.annotationArray) < self.amountOfCutouts: return
 
         amountOfLabels = self.scrollAreaWidgetLayout.count()
@@ -1081,9 +1084,54 @@ class AnnotationsDialog(QDialog):
             else:
                 idx = videoName.index(videoName)
                 videos[idx].append((*bgsubInfo, points))
-        for vid in videos:
-            print(vid)
-            print('\n')
+        data = []
+        for videoName, vid in zip(videoNames, videos):
+            if os.path.isfile(videoName):
+                # it is a video, is validity was check when loading
+
+                newData = self.getDataFromVideo(vid)
+                data = data + newData
+            elif os.path.isdir(videoName):
+                newData = self.getDataFromFolder(vid)
+                data = data + newData
+
+    def getDataFromVideo(self, vid):
+        data = []
+
+        videoName = vid[0][0]
+        vidObj = cv2.VideoCapture(videoName)
+        bgsubVid = bgsub(vidObj)
+        for labelData in vid:
+            _, frameIdx, crops, points = labelData
+            sy, by, sx, bx = crops
+            cutOut = (bgsubVid[frameIdx])[sy: by + 1, sx: bx + 1]
+            sizeY, sizeX = cutOut.shape[:2]
+            points[0] = [points[0][0] * sizeX, points[0][1] * sizeY]
+            points[1] = [points[1][0] * sizeX, points[1][1] * sizeY]
+            # cv.imwrite('fish_'+ str(self.amountOfDataPutInCutOutData) +'.png', cutOut)
+            # np.save('fish_'+ str(self.amountOfDataPutInCutOutData) +'.npy', np.array(points))
+            data.append((cutOut, points))
+        return data
+
+    def getDataFromFolder(self, vid):
+        folderName = vid[0][0]
+        data = []
+
+        bgsubVid = bgsubFolder(folderName)
+        for labelData in vid:
+            _, frameIdx, crops, points = labelData
+            sy, by, sx, bx = crops
+            cutOut = (bgsubVid[frameIdx])[sy: by + 1, sx: bx + 1]
+            cv.imwrite('temp.png', cutOut)
+            print('points: ', points)
+            sizeY, sizeX = cutOut.shape[:2]
+            points[0] = [points[0][0] * sizeX, points[0][1] * sizeY]
+            points[1] = [points[1][0] * sizeX, points[1][1] * sizeY]
+            cv.imwrite('outputs/cutout_data/images/fish_' + str(self.amountOfDataPutInCutOutData) + '.png', cutOut)
+            np.save('outputs/cutout_data/points/fish_' + str(self.amountOfDataPutInCutOutData) + '.npy', np.array(points))
+            self.amountOfDataPutInCutOutData += 1
+            data.append((cutOut, points))
+        return data
 
     def markAnnotationsPressed(self):
         if not self.previousAnnotationLabel: return
