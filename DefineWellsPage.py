@@ -157,6 +157,11 @@ class GridEstimatorImageViewer(QLabel):
         self.grid = None
         self.selectedObject = None
 
+        # The labels
+        self.xLabel = None
+        self.yLabel = None
+        self.rLabel = None
+
     def setPixmap(self, pixmap):
         if self.pixmap != pixmap:
             self.points = []
@@ -347,6 +352,13 @@ class GridEstimatorImageViewer(QLabel):
 
             x, y = ev.x(), ev.y()
             x, y = (x - x_offset)/ imWidth, (y - y_offset)/ imWidth
+
+            # Setting the labels of the selected object:
+            x0, y0, r0 = self.grid[self.selectedObject[1]]
+            self.xLabel.setText('x: ' + str(int(x0 * self.arrayShape[1])))
+            self.yLabel.setText('y: ' + str(int(y0 * self.arrayShape[1])))
+            self.rLabel.setText('r: ' + str(int(r0 * self.arrayShape[1])))
+
             if self.selectedObject[0]:
                 x0, y0, r0 = self.grid[self.selectedObject[1]]
                 r = ((x - x0)**2 + (y - y0)**2)**.5
@@ -365,15 +377,27 @@ class GridEstimatorImageViewer(QLabel):
 
         if selectedObject:
             self.selectedObject = selectedObject
+            x0, y0, r0 = self.grid[self.selectedObject[1]]
+            self.xLabel.setText('x: ' + str(int(x0 * self.arrayShape[1])))
+            self.yLabel.setText('y: ' + str(int(y0 * self.arrayShape[1])))
+            self.rLabel.setText('r: ' + str(int(r0 * self.arrayShape[1])))
             self.update()
         else:
             if self.selectedObject:
                 self.selectedObject = None
+                self.xLabel.setText('x: ')
+                self.yLabel.setText('y: ')
+                self.rLabel.setText('r: ')
                 self.update()
             # self.selectedObject = None
 
         #print('X: ', ev.x())
         #print('Y: ', ev.y())
+    def setLabels(self, labels):
+        self.xLabel, self.yLabel, self.rLabel = labels
+
+    def setArrayShape(self, shape):
+        self.arrayShape = shape
 
 class IndividualWellImageViewer(QLabel):
     pixmap = None
@@ -394,6 +418,12 @@ class IndividualWellImageViewer(QLabel):
         self.circle2 = None
         self.grid = []
         self.selectedObject = None
+
+        # The labels
+        self.xLabel = None
+        self.yLabel = None
+        self.rLabel = None
+        self.arrayShape = None
 
     def setPixmap(self, pixmap):
         if self.pixmap != pixmap:
@@ -627,6 +657,12 @@ class IndividualWellImageViewer(QLabel):
 
             x, y = ev.x(), ev.y()
             x, y = (x - x_offset)/ imWidth, (y - y_offset)/ imWidth
+
+            x0, y0, r0 = self.grid[self.selectedObject[1]]
+            self.xLabel.setText('x: ' + str(int(x0 * self.arrayShape[1])))
+            self.yLabel.setText('y: ' + str(int(y0 * self.arrayShape[1])))
+            self.rLabel.setText('r: ' + str(int(r0 * self.arrayShape[1])))
+
             if self.selectedObject[0]:
                 x0, y0, r0 = self.grid[self.selectedObject[1]]
                 r = ((x - x0)**2 + (y - y0)**2)**.5
@@ -645,10 +681,17 @@ class IndividualWellImageViewer(QLabel):
 
         if selectedObject:
             self.selectedObject = selectedObject
+            x0, y0, r0 = self.grid[self.selectedObject[1]]
+            self.xLabel.setText('x: ' + str(int(x0 * self.arrayShape[1])))
+            self.yLabel.setText('y: ' + str(int(y0 * self.arrayShape[1])))
+            self.rLabel.setText('r: ' + str(int(r0 * self.arrayShape[1])))
             self.update()
         else:
             if self.selectedObject:
                 self.selectedObject = None
+                self.xLabel.setText('x: ')
+                self.yLabel.setText('y: ')
+                self.rLabel.setText('r: ')
                 self.update()
             # self.selectedObject = None
 
@@ -658,6 +701,12 @@ class IndividualWellImageViewer(QLabel):
         self.update()
         #print('X: ', ev.x())
         #print('Y: ', ev.y())
+
+    def setLabels(self, labels):
+        self.xLabel, self.yLabel, self.rLabel = labels
+
+    def setArrayShape(self, shape):
+        self.arrayShape = shape
 
 class TitleLabel(QLabel):
     def __init__(self, *args, **kwargs):
@@ -737,6 +786,33 @@ class DefineWellsPage(QWidget):
 
         topFrame = QFrame()
         topFrame.setStyleSheet('border: 1px solid')
+        topFrameLayout = QVBoxLayout()
+        topFrameLayout.setContentsMargins(0,0,0,0)
+        topFrameLayout.setSpacing(0)
+        topFrameTitle = QLabel('Info')
+        topFrameTitle.setStyleSheet('border: 0px;'+
+                                    'border-bottom: 1px solid')
+        topFrameTitle.setAlignment(Qt.AlignHCenter)
+        topFrameLayout.addWidget(topFrameTitle, 0)
+        topInfo = QWidget()
+        topInfo.setStyleSheet('border: 0px')
+        topInfoLayout = QHBoxLayout()
+        topInfoLayout.setContentsMargins(5,0,0,0)
+        topInfoLayout.setSpacing(0)
+        self.xInfo = QLabel('x: ')
+        self.yInfo = QLabel('y: ')
+        topInfoLayout.addWidget(self.xInfo)
+        topInfoLayout.addWidget(self.yInfo)
+        topInfo.setLayout(topInfoLayout)
+        self.rInfo = QLabel('r: ')
+        self.rInfo.setStyleSheet('border: 0px;' +
+                                 'border-top: 1px solid')
+        topFrameLayout.addWidget(topInfo, 1)
+        topFrameLayout.addWidget(self.rInfo, 1)
+        topFrame.setLayout(topFrameLayout)
+
+        self.gridEstimatorImageViewer.setLabels([self.xInfo, self.yInfo, self.rInfo])
+        self.individualImageViewer.setLabels([self.xInfo, self.yInfo, self.rInfo])
         # topFrame = QTextEdit()
         # topFrame.setReadOnly(True)
         # topFrame.setMinimumSize(0,0)
@@ -747,6 +823,10 @@ class DefineWellsPage(QWidget):
         middleFrame.setStyleSheet('border: 1px solid')
         middleFrameLayout = QVBoxLayout()
         middleFrameLayout.setContentsMargins(0,0,0,0)
+        middleFrameLayout.setSpacing(0)
+        middleFrameTitle = QLabel('Mode')
+        middleFrameTitle.setStyleSheet('border-bottom: 0px')
+        middleFrameTitle.setAlignment(Qt.AlignHCenter)
         radioButtons = QWidget()
         # radioButtons.setStyleSheet('border: 0px')
         radioButtonsLayout = QHBoxLayout()
@@ -765,7 +845,8 @@ class DefineWellsPage(QWidget):
         individualButton.setStyleSheet('border: 0px')
         radioButtonsLayout.addWidget(individualButton)
         radioButtons.setLayout(radioButtonsLayout)
-        middleFrameLayout.addWidget(radioButtons)
+        middleFrameLayout.addWidget(middleFrameTitle, 0)
+        middleFrameLayout.addWidget(radioButtons, 1)
         # middleFrame.setStyleSheet('border: 1px solid')
         middleFrame.setLayout(middleFrameLayout)
 
@@ -784,9 +865,9 @@ class DefineWellsPage(QWidget):
 
         # bottomFrame.setStyleSheet('border: 1px solid')
 
-        sideBarLayout.addWidget(topFrame)
-        sideBarLayout.addWidget(middleFrame)
-        sideBarLayout.addWidget(bottomFrame)
+        sideBarLayout.addWidget(topFrame, 1)
+        sideBarLayout.addWidget(middleFrame, 1)
+        sideBarLayout.addWidget(bottomFrame, 1)
 
         sideBar.setLayout(sideBarLayout)
 
@@ -854,6 +935,13 @@ class DefineWellsPage(QWidget):
             splitText = filenames[0].split('/')
             self.individualImageViewer.setPixmap(QPixmap(filename))
             self.gridEstimatorImageViewer.setPixmap(QPixmap(filename))
+            arrayShape = cv.imread(filename).shape[:2]
+            self.gridEstimatorImageViewer.setArrayShape(arrayShape)
+            self.individualImageViewer.setArrayShape(arrayShape)
+
+            self.xInfo.setText('x: ')
+            self.yInfo.setText('y: ')
+            self.rInfo.setText('r: ')
 
     def saveGrid(self):
         if self.stack.currentWidget().grid:

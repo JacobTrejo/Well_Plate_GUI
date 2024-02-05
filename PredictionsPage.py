@@ -388,14 +388,16 @@ class PredictionPage(QWidget):
         # self.widget.play()
 
     def pressedGridLabel(self, event):
-        if len(self.drawingItems) > 0:
-            for item in self.drawingItems:
-                self.widget._scene.removeItem(item)
-            self.drawingItems = []
-            return
+        # if len(self.drawingItems) > 0:
+        #     for item in self.drawingItems:
+        #         self.widget._scene.removeItem(item)
+        #     self.drawingItems = []
+        #     return
 
         print('You pressed the grid label')
         grid = np.load(self.gridPath)
+        self.widget.setGrid(grid)
+        return
         newWidth = self.widget.newWidth
         grid *= newWidth
         for circle in grid:

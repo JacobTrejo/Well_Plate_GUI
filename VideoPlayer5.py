@@ -39,6 +39,7 @@ class Widget(QtWidgets.QWidget):
 
         # This variable holds the grid
         self.grid = None
+        self.drawingItems = []
         self.ready = False
 
         self._scene = QtWidgets.QGraphicsScene(self)
@@ -220,7 +221,26 @@ class Widget(QtWidgets.QWidget):
 
         print('widget height: ', a0.size().height())
         print('scene height: ', newHeight)
+        # removing the older ones
+        for item in self.drawingItems:
+            self._scene.removeItem(item)
+        self.drawingItems = []
 
+        if self.grid is not None:
+            grid = self.grid * self.newWidth
+            for circle in grid:
+                x, y, r = circle
+                diameter = 2 * r
+
+                ellipse_item = QtWidgets.QGraphicsEllipseItem((x) - (diameter / 2),
+                                                              (y) - (diameter / 2), diameter, diameter)
+                ellipse_item.setPen(QtGui.QPen(QtCore.Qt.red))
+                self.drawingItems.append(ellipse_item)
+                self._scene.addItem(ellipse_item)
+
+    def setGrid(self, grid):
+        self.grid = grid
+        self.update()
 
 
 
