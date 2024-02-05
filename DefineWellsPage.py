@@ -244,7 +244,6 @@ class GridEstimatorImageViewer(QLabel):
 
             x_offset = (self.width() - imWidth) / 2
             y_offset = (self.height() - imHeight) / 2
-            print('drawing points')
             # pen = QPen(Qt.red)
             # pen.setWidth(10)
             qp.setPen( QPen(QColor(0,0,0,0)) )
@@ -512,7 +511,6 @@ class IndividualWellImageViewer(QLabel):
 
             x_offset = (self.width() - imWidth) / 2
             y_offset = (self.height() - imHeight) / 2
-            print('drawing points')
             # pen = QPen(Qt.red)
             # pen.setWidth(10)
             qp.setPen( QPen(QColor(0,0,0,0)) )
@@ -899,7 +897,6 @@ class DefineWellsPage(QWidget):
         if radioButton.mode == "INDIVIDUAL":
             self.stack.setCurrentIndex(1)
             # self.gridEstimatorImageViewer = IndividualWellImageViewer(QPixmap('wellplate.png'))
-            print('Changing it to Individuals')
             # # self.mainWidgetLayout.replaceWidget(
             # #     self.gridEstimatorImageViewer, IndividualWellImageViewer(QPixmap('wellplate.png')))
             # # self.mainWidgetLayout.removeWidget(self.gridEstimatorImageViewer)

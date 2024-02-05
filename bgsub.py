@@ -93,9 +93,9 @@ def bgsubFolder(folderName):
 
     return outputVid
 
-# vidObj = cv2.VideoCapture('videosActual/zebrafish.mp4')
-bgsubVid = bgsubFolder('videosActual/wellPlateImages')
-print(len(bgsubVid))
+# # vidObj = cv2.VideoCapture('videosActual/zebrafish.mp4')
+# bgsubVid = bgsubFolder('videosActual/wellPlateImages')
+# print(len(bgsubVid))
 
 
 
