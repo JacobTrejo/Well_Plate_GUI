@@ -1,7 +1,25 @@
 from Auxilary import *
+
+import torch
+from NN.ResNet_Blocks_3D_four_blocks import resnet18
+from NN.CustomDataset2 import CustomImageDataset
+from NN.CustomDataset2 import padding
+import torchvision
+import torch.optim as optim
+import torchvision.transforms as transforms
+import torch.nn as nn
+from torchvision import datasets
+from torch.utils.data import DataLoader
+from torchvision.utils import save_image
+
+import cv2 as cv
+import cv2
 # from VideoPlayer3 import Widget
 from VideoPlayer5 import Widget
 from PyQt5 import QtCore, QtGui
+import os
+from bgsub import bgsub, bgsubFolder
+import time
 
 class ImageViewer(QLabel):
     pixmap = None
@@ -85,6 +103,11 @@ class PredictionPage(QWidget):
 
         # Temp ?
         self.drawingItems = []
+
+        self.gridPath = None
+        self.modelPath = None
+
+        self.videoPathList = []
 
         self.videoList = []
         self.selectedPath = []
@@ -180,6 +203,7 @@ class PredictionPage(QWidget):
         # The elements of the fourth frame
         button4 = QPushButton('Run', self)
         button4.setStyleSheet(smallerButtonStyleSheet)
+        button4.clicked.connect(self.run)
         # adding the elements to the fourth frame
 
         ccButton = QPushButton('Calculate CC')
@@ -366,6 +390,7 @@ class PredictionPage(QWidget):
         if len(filenames):
             splitText = filenames[0].split('/')
             self.modelLabel.setText(splitText[-1])
+            self.modelPath = filenames[0]
 
     def getGrid(self):
         dlg = QFileDialog()
@@ -414,7 +439,277 @@ class PredictionPage(QWidget):
         self.parent().parent().backPressed()
         print('You pressed back')
 
+    def run(self):
+        # Real version
+        # if self.gridPath is None or self.modelPath is None:
+        #     print('You did not load a grid or model')
+        #     return
+        # grid = np.load(self.gridPath)
+        # amount = self.vboxForScrollArea.count()
+        # videoPaths = []
+        # for labelIdx in range(amount):
+        #     path = self.vboxForScrollArea.itemAt(labelIdx).widget().path
+        #     videoPaths.append(path)
 
+        # Fast testing version
+        self.gridPath = 'grids/wellplate.npy'
+        grid = np.load(self.gridPath)
+        self.modelPath = 'models/resnet_pose_best_python_230608_four_blocks.pt'
+        videoPaths = ['videos/wellPlateImages']
+
+        # Let's expand the grid to the size it should be
+        if os.path.isfile(videoPaths[0]):
+            # Lets assume that it is a video
+            try:
+                vid = cv.VideoCapture(videoPaths[0])
+                width = vid.get(cv.CAP_PROP_FRAME_WIDTH)
+                grid *= width
+            except:
+                print('One of your files was invalid')
+        elif os.path.isdir(videoPaths[0]):
+            # We are assuming that it is a folder with images
+            try:
+                imageNames = os.listdir(videoPaths[0])
+                frame0 = cv.imread(videoPaths[0] + '/' + imageNames[0])
+                width = frame0.shape[1]
+                grid *= width
+            except:
+                print('One of your folders was invalid')
+        else:
+            # Will we even reach this line ??
+            print('One of the videos you have selected is not a valid format')
+        grid[:,2] = 49
+        # Let's load the model
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.resnetModel = resnet18(1, 12, activation='leaky_relu').to(self.device)
+        self.resnetModel = nn.DataParallel(self.resnetModel)
+        if torch.cuda.is_available():
+            self.resnetModel.load_state_dict(torch.load(self.modelPath))
+        else:
+            self.resnetModel.load_state_dict(torch.load(self.modelPath, map_location=torch.device('cpu')))
+
+        self.resnetModel.eval()
+        torch.no_grad()
+        n_cuda = torch.cuda.device_count()
+        if (torch.cuda.is_available()):
+            print(str(n_cuda) + 'GPUs are available!')
+            self.nworkers = n_cuda * 12
+            self.pftch_factor = 2
+        else:
+            print('Cuda is not available. Training without GPUs. This might take long')
+            self.nworkers = 2
+            self.pftch_factor = 1
+            # self.nworkers = 1
+            # self.pftch_factor = 1
+        self.batch_size = 512 * n_cuda
+        if n_cuda == 0: self.batch_size = 10
+        # Initialize
+        for videoPath in videoPaths:
+            if os.path.isfile(videoPath):
+                self.predict4VideoFile(videoPath, grid)
+            elif os.path.isdir(videoPath):
+                self.predict4Folder(videoPath, grid)
+
+
+    def predict4VideoFile(self, videoPath, grid):
+            print('You predicted for the video')
+
+    def predict4Folder(self, folderPath, grid):
+        bgsubList = bgsubFolder(folderPath)
+        frame0 = bgsubList[0]
+        # self.predictForFrame(frame0, grid)
+        self.predictForFrames(bgsubList[:10], grid)
+        print('You predicted for the folder')
+
+    def predictForFrames(self, images, grid):
+        green = [0, 255, 0]
+        red = [0, 0, 255]
+        rgb = np.stack((images[0], images[0], images[0]), axis=2)
+        cutOutList = []
+        circIdx = 0
+        amountOfCircles = grid.shape[0]
+        for image in images:
+            for circ in grid:
+                center = (int(circ[0]), int(circ[1]))
+                radius = int(circ[2])
+
+                sX = center[0] - radius
+                bX = center[0] + radius
+                sY = center[1] - radius
+                bY = center[1] + radius
+
+                cutOut = image[sY:bY + 1, sX:bX + 1]
+
+                cutOut = cutOut.astype(float)
+                cutOut *= 255 / np.max(cutOut)
+                cutOut = cutOut.astype(np.uint8)
+
+                cutOutList.append(cutOut)
+        model = self.resnetModel
+
+        # create a quantized model instance
+        model_int8 = torch.ao.quantization.quantize_dynamic(
+            model,  # the original model
+            {torch.nn.Linear, nn.Conv2d},  # a set of layers to dynamically quantize
+            dtype=torch.qint8)
+
+        print('starting')
+        start = time.time()
+        transform = transforms.Compose([padding(), transforms.PILToTensor()])
+        data = CustomImageDataset(cutOutList, transform=transform)
+        loader = DataLoader(data, batch_size=self.batch_size, shuffle=False, num_workers=self.nworkers,
+                            prefetch_factor=self.pftch_factor, persistent_workers=True)
+
+        for i, im in enumerate(loader):
+            im = im.to(self.device)
+            pose_recon = model_int8(im)
+
+            # pose_recon = pose_recon.detach().cpu().numpy()
+            # im = np.squeeze(im.detach().cpu().numpy())
+
+            # # The following is extra computation stuff lets take it out for now
+            # pose_recon = pose_recon.detach().cpu().numpy()
+            # im = np.squeeze(im.cpu().detach().numpy())
+            #
+            # for imIdx in range(im.shape[0]):
+            #     im1 = im[imIdx, ...]
+            #     im1 *= 255
+            #     im1 = im1.astype(np.uint8)
+            #     pt1 = pose_recon[imIdx, ...]
+            #
+            #     noFishThreshold = 10
+            #     if np.max(pt1) < noFishThreshold:
+            #         # This is just a placeholder
+            #         jj = 5
+            #
+            #     else:
+            #
+            #         # pt1 = pt1.astype(int)
+            #         # im1[pt1[1,:], pt1[0,:]] =  255
+            #         # cv.imwrite('test.png', im1)
+            #         # exit()
+            #
+            #         # Fix this part up, should try to get rid of using np.where
+            #         nonZero = np.where(im1 > 0)
+            #         sY = np.min(nonZero[0])
+            #         sX = np.min(nonZero[1])
+            #         pt1[0, :] -= sX
+            #         pt1[1, :] -= sY
+            #
+            #         circ = grid[circIdx]
+            #         center = (int(circ[0]), int(circ[1]))
+            #         radius = int(circ[2])
+            #
+            #         sX = center[0] - radius
+            #         bX = center[0] + radius
+            #         sY = center[1] - radius
+            #         bY = center[1] + radius
+            #         # sX, sY, bX, bY = boxes[ imIdx, ...]
+            #         pt1[0, :] += sX
+            #         pt1[1, :] += sY
+            #         pt1 = pt1.astype(int)
+            #
+            #         rgb[pt1[1, :10], pt1[0, :10]] = green
+            #         rgb[pt1[1, 10:], pt1[0, 10:]] = red
+            #
+            #     circIdx += 1
+            #     if circIdx == amountOfCircles: circIdx = 0
+
+
+
+        end = time.time()
+        print("Finished predicting")
+        print('duration: ', end - start)
+    def predictForFrame(self, image, grid):
+        green = [0, 255, 0]
+        red = [0, 0, 255]
+        rgb = np.stack((image, image, image), axis = 2)
+        cutOutList = []
+        circIdx = 0
+        amountOfCircles = grid.shape[0]
+        for circ in grid:
+            center = (int(circ[0]), int(circ[1]))
+            radius = int(circ[2])
+
+            sX = center[0] - radius
+            bX = center[0] + radius
+            sY = center[1] - radius
+            bY = center[1] + radius
+
+
+            cutOut = image[sY:bY + 1, sX:bX + 1]
+
+            cutOut = cutOut.astype(float)
+            cutOut *= 255 / np.max(cutOut)
+            cutOut = cutOut.astype(np.uint8)
+
+            cutOutList.append(cutOut)
+
+        for cutoutIdx, cutout in enumerate(cutOutList):
+            cv.imwrite('temp2/well_' + str(cutoutIdx) + '.png', cutout)
+            # Prepping the data to give to resnet
+        transform = transforms.Compose([padding(), transforms.PILToTensor()])
+        data = CustomImageDataset(cutOutList, transform=transform)
+        loader = DataLoader(data, batch_size=self.batch_size, shuffle=False, num_workers=self.nworkers,
+                            prefetch_factor=self.pftch_factor, persistent_workers=True)
+
+        for i, im in enumerate(loader):
+            im = im.to(self.device)
+            pose_recon = self.resnetModel(im)
+
+            # pose_recon = pose_recon.detach().cpu().numpy()
+            # im = np.squeeze(im.detach().cpu().numpy())
+
+            pose_recon = pose_recon.detach().cpu().numpy()
+            im = np.squeeze(im.cpu().detach().numpy())
+
+            for imIdx in range(im.shape[0]):
+                im1 = im[imIdx, ...]
+                im1 *= 255
+                im1 = im1.astype(np.uint8)
+                pt1 = pose_recon[imIdx, ...]
+
+                noFishThreshold = 10
+                if np.max(pt1) < noFishThreshold:
+                    # This is just a placeholder
+                    jj = 5
+
+                else:
+
+                    # pt1 = pt1.astype(int)
+                    # im1[pt1[1,:], pt1[0,:]] =  255
+                    # cv.imwrite('test.png', im1)
+                    # exit()
+
+                    # Fix this part up, should try to get rid of using np.where
+                    nonZero = np.where(im1 > 0)
+                    sY = np.min(nonZero[0])
+                    sX = np.min(nonZero[1])
+                    pt1[0, :] -= sX
+                    pt1[1, :] -= sY
+
+                    circ = grid[circIdx]
+                    center = (int(circ[0]), int(circ[1]))
+                    radius = int(circ[2])
+
+                    sX = center[0] - radius
+                    bX = center[0] + radius
+                    sY = center[1] - radius
+                    bY = center[1] + radius
+                    # sX, sY, bX, bY = boxes[ imIdx, ...]
+                    pt1[0, :] += sX
+                    pt1[1, :] += sY
+                    pt1 = pt1.astype(int)
+
+                    rgb[pt1[1, :10], pt1[0, :10]] = green
+                    rgb[pt1[1, 10:], pt1[0, 10:]] = red
+
+                circIdx += 1
+                if circIdx == amountOfCircles: circIdx = 0
+
+
+        print('done predicting')
+        cv.imwrite('temp.png', rgb)
 if __name__ == '__main__':
     from Testing import *
     TestingWindow.testingClass = PredictionPage

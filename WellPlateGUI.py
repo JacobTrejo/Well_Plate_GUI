@@ -47,11 +47,11 @@ class WellPlateGUI(QMainWindow):
 
     def intrinsicParametersPressed(self):
         self.myCentralWidget.setCurrentIndex(3)
-
-app = QApplication(sys.argv)
-ex = WellPlateGUI()
-# ex = PredictionWindow()
-sys.exit(app.exec_())
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = WellPlateGUI()
+    # ex = PredictionWindow()
+    sys.exit(app.exec_())
 
 
 

@@ -1034,7 +1034,12 @@ class AnnotationsDialog(QDialog):
 
         # mainWidget.setStyleSheet('border: 1px solid')
 
-        centralWidgetLayout.addWidget(mainWidget, 1)
+        self.stackWidget = QStackedWidget()
+        self.stackWidget.addWidget(mainWidget)
+        self.stackWidget.addWidget(QWidget())
+        centralWidgetLayout.addWidget(self.stackWidget, 1)
+
+        # centralWidgetLayout.addWidget(mainWidget, 1)
 
         self.setLayout(centralWidgetLayout)
 
@@ -1069,6 +1074,8 @@ class AnnotationsDialog(QDialog):
         self.previousAnnotationLabel = label
 
     def doneFunction(self):
+        self.stackWidget.setCurrentIndex(1)
+
         if np.count_nonzero(self.annotationArray) < self.amountOfCutouts: return
 
         amountOfLabels = self.scrollAreaWidgetLayout.count()
