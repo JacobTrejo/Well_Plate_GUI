@@ -1,8 +1,8 @@
-from MenuPage import MenuPage
-from PredictionsPage import PredictionPage
-from DefineWellsPage import DefineWellsPage
-from IntrinsicParametersPage import IntrinsicParametersPage
-from Auxilary import *
+from GUI_Pages.MenuPage import MenuPage
+from GUI_Pages.PredictionsPage import PredictionPage
+from GUI_Pages.DefineWellsPage import DefineWellsPage
+from GUI_Pages.IntrinsicParametersPage import IntrinsicParametersPage
+from GUI_Pages.Auxilary import *
 class WellPlateGUI(QMainWindow):
 
     def __init__(self, *args, **kwargs):
