@@ -586,6 +586,7 @@ class PredictionPage(QWidget):
         print('You predicted for the folder')
 
     def predictForFrames(self, images, grid):
+
         green = [0, 255, 0]
         red = [0, 0, 255]
         rgbs = []
