@@ -40,6 +40,59 @@ def estimateGridFrom2Corners(circle1, circle2):
 
     return(grid)
 
+def estimateGridFrom4Corners(circle1, circle2, circle3, circle4):
+    (x1, y1), r1 = circle1
+    (x2, y2), r2 = circle2
+    (x3, y3), r3 = circle3
+    (x4, y4), r4 = circle4
+
+    sx, bx = min(x1, x4), max(x1, x4)
+    sy, by = min(y1, y4), max(y1, y4)
+
+    r = np.mean((r1, r2))
+
+    dx = bx - sx
+    dy = by - sy
+
+    amountOfColumns = round(dx / (2 * r)) + 1
+    amountOfRows = round(dy / (2 * r)) + 1
+    print('new rows: ', amountOfRows)
+    print('new cols: ', amountOfColumns)
+
+    # amountOfRows = 6
+    # amountOfColumns = 8
+
+    x_direction_rows_first = (x3 - x1) / (amountOfRows - 1)
+    y_direction_rows_first = (y3 - y1) / (amountOfRows - 1)
+
+    x_direction_column_first = (x2 - x1) / (amountOfColumns- 1)
+    y_direction_column_first = (y2 - y1) / (amountOfColumns- 1)
+
+    x_direction_rows_second = (x4 - x2) / (amountOfRows - 1)
+    y_direction_rows_second = (y4 - y2) / (amountOfRows - 1)
+
+    x_direction_column_second = (x4 - x3) / (amountOfColumns- 1)
+    y_direction_column_second = (y4 - y3) / (amountOfColumns- 1)
+
+
+    # stepX = dx / (amountOfColumns - 1)
+    # stepY = dy / (amountOfRows - 1)
+
+    grid = []
+    for rowIdx in range(amountOfRows):
+        for colIdx in range(amountOfColumns):
+            x_steps_column = ((amountOfRows - 1 - rowIdx) * x_direction_column_first + (rowIdx) * x_direction_column_second) / (
+                        amountOfRows - 1)
+            y_steps_column = ((amountOfRows - 1 - rowIdx) * y_direction_column_first + (rowIdx) * y_direction_column_second) / (
+                        amountOfRows - 1)
+
+            x = x1 + colIdx * x_steps_column + rowIdx * x_direction_rows_first
+            y = y1 + colIdx * y_steps_column + rowIdx * y_direction_rows_first
+
+            grid.append([x, y, r])
+
+    return (grid)
+
     # print('columns: ', amountOfColumns)
     # print('rows: ', amountOfRows)
 
@@ -250,13 +303,37 @@ class GridEstimatorImageViewer(QLabel):
             qp.setBrush(Qt.red)
 
 
-            if len(self.points) < 3:
+            if len(self.points) < 11:
 
                 for point in self.points:
                     # qp.drawPoint(int(point[0]), int( point[1]) )
                     # qp.drawEllipse(int((point[0] * imWidth) + x_offset ), int( (point[1] * imHeight ) + y_offset ), 5,5)
                     center = QtCore.QPoint( int( round((point[0] * imWidth) + x_offset ) ), int( round((point[1] * imHeight ) + y_offset) ) )
                     qp.drawEllipse(center, 2,2)
+
+                if (len(self.points) / 3) > 0:
+                    qp.setPen(Qt.magenta)
+                    qp.setBrush(QBrush(QColor(0, 0, 0, 0)))
+
+                    realIdx = 0
+                    translatedPoints = np.array(self.points.copy())
+
+                    translatedPoints[:, 0] *= imWidth
+                    translatedPoints[:, 0] += x_offset
+                    translatedPoints[:, 1] *= imHeight
+                    translatedPoints[:, 1] += y_offset
+                    amount = int(len(self.points) / 3)
+
+                    for tempIdx in range(amount):
+                        realIdx = 3 * tempIdx
+                        center, r = returnCircleParameters(translatedPoints[realIdx], translatedPoints[realIdx + 1],
+                                                           translatedPoints[realIdx + 2])
+                        x, y = center
+                        x, y, r = int(round(x)), int(round(y)), int(round(r))
+                        center = QtCore.QPoint(x, y)
+                        qp.drawEllipse(center, r, r)
+
+
             else:
                 # We will use the first three points to draw a circle
                 qp.setPen(Qt.magenta)
@@ -273,15 +350,31 @@ class GridEstimatorImageViewer(QLabel):
                 center = QtCore.QPoint(int(center[0]), int(center[1]))
                 qp.drawEllipse(center, int(round(r)), int(round(r)))
 
-                if len(self.points) == 6:
-                    # Actually we should draw the grid
+                if len(self.points) == 12:
+                    circles = []
 
-                    # We will draw the grid
+                    step = 3
+                    for circleIdx in range(4):
+                        realIdx = circleIdx * step
+                        center, r = returnCircleParameters(translatedPoints[realIdx], translatedPoints[realIdx + 1], translatedPoints[realIdx + 2])
+                        circle = (center, r)
+                        circles.append(circle)
 
-                    # We will use the remaining three points to draw the second circle
-                    center, r = returnCircleParameters(translatedPoints[3], translatedPoints[4], translatedPoints[5])
+                    center0, r0 = circles[0]
+                    center1, r1 = circles[1]
+                    center2, r2 = circles[2]
+                    center3, r3 = circles[3]
 
-                    grid = estimateGridFrom2Corners((center0, r0), (center, r))
+                    # # Actually we should draw the grid
+                    #
+                    # # We will draw the grid
+                    #
+                    # # We will use the remaining three points to draw the second circle
+                    # center, r = returnCircleParameters(translatedPoints[3], translatedPoints[4], translatedPoints[5])
+                    #
+                    # grid = estimateGridFrom2Corners((center0, r0), (center, r))
+
+                    grid = estimateGridFrom4Corners((center0, r0), (center1, r1), (center2, r2), (center3, r3))
 
                     self.grid = normalizeGrid(grid, (x_offset, y_offset), (imWidth, imHeight))
                     # grid = unNormalizeGrid(self.grid, (x_offset, y_offset), (imWidth, imHeight))
@@ -330,7 +423,7 @@ class GridEstimatorImageViewer(QLabel):
 
         # We have to check if the point is in bounds
         if x >= 0 and x <= imWidth and y >=0  and y <= imHeight:
-            self.amountOfPoints = (self.amountOfPoints + 1) % 7
+            self.amountOfPoints = (self.amountOfPoints + 1) % 13
 
             if self.amountOfPoints == 0:
                 self.points = []

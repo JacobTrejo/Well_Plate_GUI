@@ -16,6 +16,7 @@ import cv2 as cv
 import cv2
 # from VideoPlayer3 import Widget
 from VideoPlayer5 import Widget
+from VideoPlayerFolders2 import FolderVideoPlayer
 from PyQt5 import QtCore, QtGui
 import os
 from bgsub import bgsub, bgsubFolder
@@ -242,7 +243,9 @@ class PredictionPage(QWidget):
         # self.label = ImageViewer(QPixmap('wellplate.png'))
         self.label = ImageViewer()
 
-        # label.setPixmap(QPixmap('wellplate.png'))
+        # Creating a stack widget to handle when the videos are folders
+        # NOTE: addition
+        self.leftWidgetStack = QStackedWidget()
 
         # print(label.size())
         leftWidget = QWidget()
@@ -290,9 +293,16 @@ class PredictionPage(QWidget):
         leftWidget.setStyleSheet('border: 1px solid black')
         # self.label.show()
 
+        # # Now creating the other widget for the folders
+        self.folderVideoPlayer = FolderVideoPlayer()
+        self.leftWidgetStack.addWidget( leftWidget )
+        self.leftWidgetStack.addWidget(self.folderVideoPlayer)
+
         # self.label.adjustSize()
         mainLayout = QHBoxLayout()
-        mainLayout.addWidget(leftWidget)
+        # NOTE: addition
+        mainLayout.addWidget(self.leftWidgetStack)
+        # mainLayout.addWidget(leftWidget)
         mainLayout.addWidget(rightWidget)
 
         mainLayout.setStretch(0, 200)
@@ -361,7 +371,7 @@ class PredictionPage(QWidget):
             scrollLabel = ScrollLabel(name)
             scrollLabel.path = path
             scrollLabel.mousePressEvent = \
-                functools.partial(self.pressedScrollLabel, path=scrollLabel.path)
+                functools.partial(self.pressedScrollLabel, path=scrollLabel.path, label = scrollLabel)
             self.vboxForScrollArea.addWidget(scrollLabel)
 
 
@@ -406,11 +416,39 @@ class PredictionPage(QWidget):
         print('You pressed me')
         return
 
-    def pressedScrollLabel(self, event, path=None):
+    def pressedScrollLabel(self, event, path=None, label = None):
         # self.label.setPixmap(QPixmap( path ))
-        self.widget.initializePlayer(path)
-        self.widget.ready = True
-        # self.widget.play()
+
+        if event.button() == Qt.RightButton:
+            print('right button pressed')
+
+            # self.vBoxForScrollArea.removeWidget(fishLabel)
+            # fishLabel.close()
+            # self.cutOutWidget.setPixmap(None)
+
+            menu = QMenu()
+            menu.addAction('Remove', functools.partial( self.removeVideoLabel, label) )
+            menu.exec_(QCursor().pos())
+        else:
+            # Resetting the grids
+            self.widget.removeGrid()
+            self.folderVideoPlayer.removeGrid()
+
+            if os.path.isdir(path):
+                self.leftWidgetStack.setCurrentIndex(1)
+                self.folderVideoPlayer.setFolderName(path)
+            elif os.path.isfile(path):
+                self.leftWidgetStack.setCurrentIndex(0)
+                self.widget.initializePlayer(path)
+                self.widget.ready = True
+
+    def removeVideoLabel(self, label):
+        self.vboxForScrollArea.removeWidget(label)
+        label.close()
+        del label
+        self.folderVideoPlayer.removeVideoFolder()
+        self.widget.removeVideo()
+        # TODO: remove grids
 
     def pressedGridLabel(self, event):
         # if len(self.drawingItems) > 0:
@@ -418,22 +456,45 @@ class PredictionPage(QWidget):
         #         self.widget._scene.removeItem(item)
         #     self.drawingItems = []
         #     return
+        if self.widget.grid is not None or self.folderVideoPlayer.imageViewer.grid is not None:
+            self.widget.removeGrid()
+            self.folderVideoPlayer.removeGrid()
+        else:
+            print('You pressed the grid label')
+            grid = np.load(self.gridPath)
 
-        print('You pressed the grid label')
-        grid = np.load(self.gridPath)
-        self.widget.setGrid(grid)
-        return
-        newWidth = self.widget.newWidth
-        grid *= newWidth
-        for circle in grid:
-            x, y, r = circle
-            diameter = 2 * r
+            if self.leftWidgetStack.currentIndex() == 1:
+                # We are in the folder video Player
+                self.folderVideoPlayer.setGrid(grid)
+            else:
+                self.widget.setGrid(grid)
 
-            ellipse_item = QtWidgets.QGraphicsEllipseItem((x) - (diameter / 2),
-                                                                (y) - (diameter / 2), diameter, diameter)
-            ellipse_item.setPen(QtGui.QPen(QtCore.Qt.red))
-            self.drawingItems.append(ellipse_item)
-            self.widget._scene.addItem(ellipse_item)
+                newWidth = self.widget.newWidth
+                copyGrid = np.copy(grid)
+                copyGrid *= newWidth
+                for circle in copyGrid:
+                    x, y, r = circle
+                    diameter = 2 * r
+
+                    ellipse_item = QtWidgets.QGraphicsEllipseItem((x) - (diameter / 2),
+                                                                        (y) - (diameter / 2), diameter, diameter)
+                    ellipse_item.setPen(QtGui.QPen(QtCore.Qt.red))
+                    self.drawingItems.append(ellipse_item)
+                    self.widget.drawingItems.append(ellipse_item)
+                    self.widget._scene.addItem(ellipse_item)
+
+            return
+            # newWidth = self.widget.newWidth
+            # grid *= newWidth
+            # for circle in grid:
+            #     x, y, r = circle
+            #     diameter = 2 * r
+            #
+            #     ellipse_item = QtWidgets.QGraphicsEllipseItem((x) - (diameter / 2),
+            #                                                         (y) - (diameter / 2), diameter, diameter)
+            #     ellipse_item.setPen(QtGui.QPen(QtCore.Qt.red))
+            #     self.drawingItems.append(ellipse_item)
+            #     self.widget._scene.addItem(ellipse_item)
 
     def pressedBack(self, event):
         self.parent().parent().backPressed()
@@ -441,21 +502,22 @@ class PredictionPage(QWidget):
 
     def run(self):
         # Real version
-        # if self.gridPath is None or self.modelPath is None:
-        #     print('You did not load a grid or model')
-        #     return
-        # grid = np.load(self.gridPath)
-        # amount = self.vboxForScrollArea.count()
-        # videoPaths = []
-        # for labelIdx in range(amount):
-        #     path = self.vboxForScrollArea.itemAt(labelIdx).widget().path
-        #     videoPaths.append(path)
-
-        # Fast testing version
-        self.gridPath = 'grids/wellplate.npy'
+        if self.gridPath is None or self.modelPath is None:
+            print('You did not load a grid or model')
+            return
         grid = np.load(self.gridPath)
-        self.modelPath = 'models/resnet_pose_best_python_230608_four_blocks.pt'
-        videoPaths = ['videos/wellPlateImages']
+        amount = self.vboxForScrollArea.count()
+        videoPaths = []
+        for labelIdx in range(amount):
+            path = self.vboxForScrollArea.itemAt(labelIdx).widget().path
+            videoPaths.append(path)
+
+        # # Fast testing version
+        # self.gridPath = 'grids/wellplate.npy'
+        # grid = np.load(self.gridPath)
+        # # self.modelPath = 'models/resnet_pose_best_python_230608_four_blocks.pt'
+        # self.modelPath = 'models/resnet_pose.pt'
+        # videoPaths = ['videos/wellPlateImages']
 
         # Let's expand the grid to the size it should be
         if os.path.isfile(videoPaths[0]):
@@ -517,17 +579,22 @@ class PredictionPage(QWidget):
     def predict4Folder(self, folderPath, grid):
         bgsubList = bgsubFolder(folderPath)
         frame0 = bgsubList[0]
-        # self.predictForFrame(frame0, grid)
-        self.predictForFrames(bgsubList[:10], grid)
+        #self.predictForFrame(frame0, grid)
+        # self.predictForFrames(bgsubList[:10], grid)
+        self.predictForFrames(bgsubList, grid)
+
         print('You predicted for the folder')
 
     def predictForFrames(self, images, grid):
         green = [0, 255, 0]
         red = [0, 0, 255]
+        rgbs = []
         rgb = np.stack((images[0], images[0], images[0]), axis=2)
         cutOutList = []
         circIdx = 0
+        imageIdx = 0
         amountOfCircles = grid.shape[0]
+        start = time.time()
         for image in images:
             for circ in grid:
                 center = (int(circ[0]), int(circ[1]))
@@ -545,6 +612,8 @@ class PredictionPage(QWidget):
                 cutOut = cutOut.astype(np.uint8)
 
                 cutOutList.append(cutOut)
+        end = time.time()
+        print('cutout duration: ', end - start)
         model = self.resnetModel
 
         # create a quantized model instance
@@ -567,54 +636,58 @@ class PredictionPage(QWidget):
             # pose_recon = pose_recon.detach().cpu().numpy()
             # im = np.squeeze(im.detach().cpu().numpy())
 
-            # # The following is extra computation stuff lets take it out for now
-            # pose_recon = pose_recon.detach().cpu().numpy()
-            # im = np.squeeze(im.cpu().detach().numpy())
-            #
-            # for imIdx in range(im.shape[0]):
-            #     im1 = im[imIdx, ...]
-            #     im1 *= 255
-            #     im1 = im1.astype(np.uint8)
-            #     pt1 = pose_recon[imIdx, ...]
-            #
-            #     noFishThreshold = 10
-            #     if np.max(pt1) < noFishThreshold:
-            #         # This is just a placeholder
-            #         jj = 5
-            #
-            #     else:
-            #
-            #         # pt1 = pt1.astype(int)
-            #         # im1[pt1[1,:], pt1[0,:]] =  255
-            #         # cv.imwrite('test.png', im1)
-            #         # exit()
-            #
-            #         # Fix this part up, should try to get rid of using np.where
-            #         nonZero = np.where(im1 > 0)
-            #         sY = np.min(nonZero[0])
-            #         sX = np.min(nonZero[1])
-            #         pt1[0, :] -= sX
-            #         pt1[1, :] -= sY
-            #
-            #         circ = grid[circIdx]
-            #         center = (int(circ[0]), int(circ[1]))
-            #         radius = int(circ[2])
-            #
-            #         sX = center[0] - radius
-            #         bX = center[0] + radius
-            #         sY = center[1] - radius
-            #         bY = center[1] + radius
-            #         # sX, sY, bX, bY = boxes[ imIdx, ...]
-            #         pt1[0, :] += sX
-            #         pt1[1, :] += sY
-            #         pt1 = pt1.astype(int)
-            #
-            #         rgb[pt1[1, :10], pt1[0, :10]] = green
-            #         rgb[pt1[1, 10:], pt1[0, 10:]] = red
-            #
-            #     circIdx += 1
-            #     if circIdx == amountOfCircles: circIdx = 0
+            # The following is extra computation stuff lets take it out for now
+            pose_recon = pose_recon.detach().cpu().numpy()
+            im = np.squeeze(im.cpu().detach().numpy())
 
+            for imIdx in range(im.shape[0]):
+                im1 = im[imIdx, ...]
+                im1 *= 255
+                im1 = im1.astype(np.uint8)
+                pt1 = pose_recon[imIdx, ...]
+
+                noFishThreshold = 10
+                if np.max(pt1) < noFishThreshold:
+                    # This is just a placeholder
+                    jj = 5
+
+                else:
+
+                    # pt1 = pt1.astype(int)
+                    # im1[pt1[1,:], pt1[0,:]] =  255
+                    # cv.imwrite('test.png', im1)
+                    # exit()
+
+                    # Fix this part up, should try to get rid of using np.where
+                    nonZero = np.where(im1 > 0)
+                    sY = np.min(nonZero[0])
+                    sX = np.min(nonZero[1])
+                    pt1[0, :] -= sX
+                    pt1[1, :] -= sY
+
+                    circ = grid[circIdx]
+                    center = (int(circ[0]), int(circ[1]))
+                    radius = int(circ[2])
+
+                    sX = center[0] - radius
+                    bX = center[0] + radius
+                    sY = center[1] - radius
+                    bY = center[1] + radius
+                    # sX, sY, bX, bY = boxes[ imIdx, ...]
+                    pt1[0, :] += sX
+                    pt1[1, :] += sY
+                    pt1 = pt1.astype(int)
+
+                    rgb[pt1[1, :10], pt1[0, :10]] = green
+                    rgb[pt1[1, 10:], pt1[0, 10:]] = red
+
+                circIdx += 1
+                if circIdx == amountOfCircles:
+                    circIdx = 0
+                    cv.imwrite('outputs/frame_' + str(imageIdx) + '.png', rgb)
+                    imageIdx += 1
+                    if imageIdx == len(images): return
+                    rgb = np.stack((images[imageIdx], images[imageIdx], images[imageIdx]), axis=2)
 
 
         end = time.time()

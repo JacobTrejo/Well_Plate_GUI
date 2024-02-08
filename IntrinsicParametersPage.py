@@ -1,9 +1,10 @@
 import cv2
-
+from scipy.stats import norm
 from Auxilary import *
 import os
 from videoFileExtensions import isVideoFile
 from bgsub import *
+from IntrinsicParametersFunctions.calculate_intrinsic_parameters import calculate_intrinsic_parameters
 
 class TitleLabel(QLabel):
     def __init__(self, *args, **kwargs):
@@ -1033,17 +1034,60 @@ class AnnotationsDialog(QDialog):
         mainWidget.setLayout(mainWidgetLayout)
 
         # mainWidget.setStyleSheet('border: 1px solid')
+        firstPage = QWidget()
+        centralWidgetLayout.addWidget(mainWidget)
+        firstPage.setLayout(centralWidgetLayout)
 
+        # Creating the second Page
+        secondPage = QWidget()
+        secondPageLayout = QVBoxLayout()
+        secondPageTitle = QLabel('Annotation Options')
+        secondPageTitle.setAlignment(Qt.AlignHCenter)
+        secondPageLayout.addWidget(secondPageTitle, 0)
+
+        secondPageButtons = QWidget()
+        secondPageButtonsLayout = QHBoxLayout()
+        calculateButton = QPushButton('Calculate Now')
+        calculateButton.clicked.connect(self.calculate)
+        calculateButton.setStyleSheet(smallerButtonStyleSheet)
+        dataButton = QPushButton('Save Data')
+        dataButton.clicked.connect(self.saveData)
+        dataButton.setStyleSheet(smallerButtonStyleSheet)
+        secondPageButtonsLayout.addWidget(calculateButton)
+        secondPageButtonsLayout.addWidget(dataButton)
+        secondPageButtons.setLayout(secondPageButtonsLayout)
+        secondPageLayout.addWidget(secondPageButtons, 1)
+
+        secondPage.setLayout(secondPageLayout)
+
+        # Creating the third Page
+        thirdPage = QWidget()
+        thirdPageLayout = QVBoxLayout()
+        thirdPageTitle = QLabel('Progress')
+        thirdPageTitle.setAlignment(Qt.AlignHCenter)
+        thirdPageLayout.addWidget(thirdPageTitle, 0)
+
+        progressBar = QProgressBar()
+        thirdPageLayout.addWidget(progressBar, alignment = Qt.AlignVCenter)
+        thirdPage.setLayout(thirdPageLayout)
+
+        # Adding the pages to our annotations window, aka self
         self.stackWidget = QStackedWidget()
-        self.stackWidget.addWidget(mainWidget)
-        self.stackWidget.addWidget(QWidget())
-        centralWidgetLayout.addWidget(self.stackWidget, 1)
+        self.stackWidget.addWidget(firstPage)
+        self.stackWidget.addWidget(secondPage)
+        self.stackWidget.addWidget(thirdPage)
 
-        # centralWidgetLayout.addWidget(mainWidget, 1)
+        myLayout = QVBoxLayout()
+        myLayout.addWidget(self.stackWidget,1)
+        self.setLayout(myLayout)
 
-        self.setLayout(centralWidgetLayout)
-
-        # dialogWindow.exec_()
+        # centralWidgetLayout.addWidget(self.stackWidget, 1)
+        #
+        # # centralWidgetLayout.addWidget(mainWidget, 1)
+        #
+        # self.setLayout(centralWidgetLayout)
+        #
+        # # dialogWindow.exec_()
 
     def annotationLabelPressed(self, label, event):
 
@@ -1075,8 +1119,29 @@ class AnnotationsDialog(QDialog):
 
     def doneFunction(self):
         self.stackWidget.setCurrentIndex(1)
-
+        return
         if np.count_nonzero(self.annotationArray) < self.amountOfCutouts: return
+
+    def saveData(self):
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.AnyFile)
+        # dlg.setFilter("Text files (*.txt)")
+        dlg.exec_()
+        filenames = dlg.selectedFiles()
+        if len(filenames):
+            folderName = filenames[0]
+            splitText = filenames[0].split('/')
+            print('The Folder you want to save to is: ', splitText[-1])
+            if not os.path.isdir(folderName):
+                print('You need to create a folder')
+                return
+        else:
+            return
+
+        imagesFolder = folderName + '/images/'
+        pointsFolder = folderName + '/points/'
+        os.makedirs(pointsFolder)
+        os.makedirs(imagesFolder)
 
         amountOfLabels = self.scrollAreaWidgetLayout.count()
         videos = []
@@ -1087,7 +1152,7 @@ class AnnotationsDialog(QDialog):
             videoName = bgsubInfo[0]
             if videoName not in videoNames:
                 videoNames.append(videoName)
-                videos.append([(*bgsubInfo,points)])
+                videos.append([(*bgsubInfo, points)])
             else:
                 idx = videoName.index(videoName)
                 videos[idx].append((*bgsubInfo, points))
@@ -1101,6 +1166,101 @@ class AnnotationsDialog(QDialog):
             elif os.path.isdir(videoName):
                 newData = self.getDataFromFolder(vid)
                 data = data + newData
+
+        for el in data:
+            cutout, points = el
+            # cv.imwrite('outputs/cutout_data/images/fish_' + str(self.amountOfDataPutInCutOutData) + '.png', cutout)
+            # np.save('outputs/cutout_data/points/fish_' + str(self.amountOfDataPutInCutOutData) + '.npy', np.array(points))
+
+            cv.imwrite(imagesFolder + 'fish_' + str(self.amountOfDataPutInCutOutData) + '.png', cutout )
+            np.save(pointsFolder + 'fish_' + str(self.amountOfDataPutInCutOutData) + '.npy', np.array(points))
+
+            self.amountOfDataPutInCutOutData += 1
+        self.amountOfDataPutInCutOutData = 0
+
+
+    def calculate(self):
+        # Choosing the location in which to save your yaml file
+        dlg = QFileDialog()
+        # dlg.setFileMode(QFileDialog.AnyFile)
+        # # dlg.setFilter("Text files (*.txt)")
+        # dlg.exec_()
+        filenames = dlg.getSaveFileName()
+
+        if len(filenames):
+            filename = filenames[0]
+
+        else:
+            return
+
+
+        # Getting the data
+        amountOfLabels = self.scrollAreaWidgetLayout.count()
+        videos = []
+        videoNames = []
+        for labelIdx in range(amountOfLabels):
+            bgsubInfo = self.scrollAreaWidgetLayout.itemAt(labelIdx).widget().bgsubInfo
+            points = self.scrollAreaWidgetLayout.itemAt(labelIdx).widget().markedPoints
+            videoName = bgsubInfo[0]
+            if videoName not in videoNames:
+                videoNames.append(videoName)
+                videos.append([(*bgsubInfo, points)])
+            else:
+                idx = videoName.index(videoName)
+                videos[idx].append((*bgsubInfo, points))
+        data = []
+        for videoName, vid in zip(videoNames, videos):
+            if os.path.isfile(videoName):
+                # it is a video, is validity was check when loading
+
+                newData = self.getDataFromVideo(vid)
+                data = data + newData
+            elif os.path.isdir(videoName):
+                newData = self.getDataFromFolder(vid)
+                data = data + newData
+        # Getting the calculations on the data
+        xVectors = np.array([])
+        seglens = []
+        for el in data:
+            (cutout, points) = el
+            points = np.array(points)
+            x, seglen = calculate_intrinsic_parameters(cutout, points)
+            xVectors = np.vstack((xVectors, x)) if xVectors.size > 0 else x
+            seglens.append(seglen)
+        seglens = np.array(seglens)
+
+        # Turning the data into the yaml file
+        modelValueNames = ['d_eye', 'c_eye', 'c_belly', 'c_head', 'eye_br', 'belly_br', 'head_br', 'eye_w', 'eye_l',
+                           'belly_w', 'belly_l', 'head_w', 'head_l', 'ball_size', 'ball_thickness', 'tail_br', 'seglen']
+        modelValues = []
+        ip = xVectors[:,3:]
+
+        for pIdx in range(ip.shape[1] + 1):
+            if pIdx == ip.shape[1]:
+                values = seglens
+            else:
+                values = ip[:, pIdx]
+
+            mu, std = norm.fit(values)
+            modelValues.append([mu, std])
+
+        # Actually writing the file
+        ipFile = open(filename, 'w')
+
+        for parameterValues, parameterName in zip(modelValues, modelValueNames):
+            mu, std = parameterValues
+
+            # Writting the distribution
+            distributionLine = parameterName + '_distribution: np.random.normal('
+            distributionLine += str(mu) + ' ,' + str(std) + ' )\n'
+            ipFile.write(distributionLine)
+
+            # Writting the mean
+            meanLine = parameterName + '_u: ' + str(mu) + ' \n'
+            ipFile.write(meanLine)
+
+        ipFile.close()
+
 
     def getDataFromVideo(self, vid):
         data = []
@@ -1129,14 +1289,12 @@ class AnnotationsDialog(QDialog):
             _, frameIdx, crops, points = labelData
             sy, by, sx, bx = crops
             cutOut = (bgsubVid[frameIdx])[sy: by + 1, sx: bx + 1]
-            cv.imwrite('temp.png', cutOut)
-            print('points: ', points)
+            # cv.imwrite('temp.png', cutOut)
+            # print('points: ', points)
             sizeY, sizeX = cutOut.shape[:2]
             points[0] = [points[0][0] * sizeX, points[0][1] * sizeY]
             points[1] = [points[1][0] * sizeX, points[1][1] * sizeY]
-            cv.imwrite('outputs/cutout_data/images/fish_' + str(self.amountOfDataPutInCutOutData) + '.png', cutOut)
-            np.save('outputs/cutout_data/points/fish_' + str(self.amountOfDataPutInCutOutData) + '.npy', np.array(points))
-            self.amountOfDataPutInCutOutData += 1
+
             data.append((cutOut, points))
         return data
 

@@ -240,7 +240,26 @@ class Widget(QtWidgets.QWidget):
 
     def setGrid(self, grid):
         self.grid = grid
-        self.update()
+        # self.update()
+
+    def removeGrid(self):
+
+        for item in self.drawingItems:
+            self._scene.removeItem(item)
+        self.drawingItems = []
+
+        self.grid = None
+
+    def removeVideo(self):
+        self._scene.removeItem(self._videoitem)
+        self._videoitem = QtMultimediaWidgets.QGraphicsVideoItem()
+
+        # self._videoitem.setSize(QtCore.QSizeF(800, 500))
+
+        # videoWidget = QVideoWidget()
+
+        self._scene.addItem(self._videoitem)
+
 
 
 
