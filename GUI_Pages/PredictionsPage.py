@@ -702,14 +702,13 @@ class PredictionPage(QWidget):
                 pt1 = pose_recon[imIdx, ...]
 
                 noFishThreshold = 10
-                if np.max(pt1) < noFishThreshold:
+                if np.max(pt1) < noFishThreshold or np.max(im1) <= 0:
                     fishData[imageIdx, circIdx, ...] = np.nan
                 else:
                     # Checking the correlation coefficients
                     cc, _ = evaluate_prediction(im1, pt1)
                     if cc > self.ccThreshold:
 
-                        print('cc: ', cc)
                         # pt1 = pt1.astype(int)
                         # im1[pt1[1,:], pt1[0,:]] =  255
                         # cv.imwrite('test.png', im1)
@@ -750,7 +749,11 @@ class PredictionPage(QWidget):
                     imageIdx += 1
                     if imageIdx == len(images):
                         print('You saved the data')
-                        np.save('outputs/fishData.npy', fishData)
+
+                        dlg = QFileDialog()
+                        fileNameForData = dlg.getSaveFileName()
+                        np.save(fileNameForData[0], fishData)
+
                         end = time.time()
                         print("Finished predicting")
                         print('duration: ', end - start)
