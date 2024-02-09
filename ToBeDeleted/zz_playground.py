@@ -1,26 +1,33 @@
 import numpy as np
 import imageio
 import cv2 as cv
-from Auxilary import *
-from bgsub import bgsubFolder
-import cv2 as cv
+# from Auxilary import *
+# from bgsub import bgsubFolder
+# import cv2 as cv
 
-grid = np.load('grids/wellplate.npy')
 
-bgsubVideo = bgsubFolder('videos/wellPlateImages')
-frame0 = bgsubVideo[20]
-frameShape = frame0.shape[:2]
-grid *= frameShape[1]
-grid = grid.astype(int)
-amount = 0
-for circle in grid:
-    cx, cy, r = circle
-    cutout = frame0[cy - r: cy + r + 1, cx - r: cx + r + 1]
-    # Normalizing
-    cutout = cutout.astype(float)
-    cutout *= (255 / np.max(cutout))
-    cv.imwrite('temp/cutout_' + str(amount) + '.png', cutout)
-    amount += 1
+x = np.zeros((50,50))
+# res = np.where(x > 0)
+# print(len(res[0]))
+max2 = np.max(x)
+print(max2 > 0)
+
+# grid = np.load('grids/wellplate.npy')
+#
+# bgsubVideo = bgsubFolder('videos/wellPlateImages')
+# frame0 = bgsubVideo[20]
+# frameShape = frame0.shape[:2]
+# grid *= frameShape[1]
+# grid = grid.astype(int)
+# amount = 0
+# for circle in grid:
+#     cx, cy, r = circle
+#     cutout = frame0[cy - r: cy + r + 1, cx - r: cx + r + 1]
+#     # Normalizing
+#     cutout = cutout.astype(float)
+#     cutout *= (255 / np.max(cutout))
+#     cv.imwrite('temp/cutout_' + str(amount) + '.png', cutout)
+#     amount += 1
 
 
 
