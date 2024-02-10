@@ -1,5 +1,6 @@
 from GUI_Pages.MenuPage import MenuPage
-from GUI_Pages.PredictionsPage import PredictionPage
+#from GUI_Pages.PredictionsPage import PredictionPage
+from GUI_Pages.PredictionsPageTesting import PredictionPage
 from GUI_Pages.DefineWellsPage import DefineWellsPage
 from GUI_Pages.IntrinsicParametersPage import IntrinsicParametersPage
 from GUI_Pages.Auxilary import *

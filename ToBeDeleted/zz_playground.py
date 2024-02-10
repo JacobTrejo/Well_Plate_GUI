@@ -5,6 +5,12 @@ import cv2 as cv
 # from bgsub import bgsubFolder
 # import cv2 as cv
 
+test = 'zebrafish'
+
+testSplit = test.split('.')
+print(testSplit[0])
+exit()
+
 
 x = np.zeros((50,50))
 # res = np.where(x > 0)

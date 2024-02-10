@@ -24,6 +24,8 @@ import os
 from GUI_Pages.bgsub import bgsub, bgsubFolder
 import time
 
+from GUI_Pages.PredictionsDialogWindow import ProgressDialog
+
 from GUI_Pages.CalculateCC.evaluation_functions import evaluate_prediction
 
 def getOpenFilesAndDirs(parent=None, caption='', directory='',
@@ -763,18 +765,26 @@ class PredictionPage(QWidget):
                     # rgb = np.stack((images[imageIdx], images[imageIdx], images[imageIdx]), axis=2)
 
     def run(self):
-        folderToSaveData = str(QFileDialog.getExistingDirectory(self, "Select Directory To Save Your Data:"))
+        # # Real version
+        # if self.gridPath is None or self.modelPath is None:
+        #     print('You did not load a grid or model')
+        #     return
 
-        # Real version
-        if self.gridPath is None or self.modelPath is None:
-            print('You did not load a grid or model')
-            return
-        grid = np.load(self.gridPath)
         amount = self.vboxForScrollArea.count()
         videoPaths = []
         for labelIdx in range(amount):
             path = self.vboxForScrollArea.itemAt(labelIdx).widget().path
             videoPaths.append(path)
+
+        progressDialog = ProgressDialog(videoPaths, self.gridPath, self.modelPath)
+        progressDialog.exec_()
+        return
+        print('You are computing after the dialog')
+        folderToSaveData = str(QFileDialog.getExistingDirectory(self, "Select Directory To Save Your Data:"))
+
+
+        grid = np.load(self.gridPath)
+
 
         # # Fast testing version
         # self.gridPath = 'grids/wellplate.npy'
@@ -1062,15 +1072,69 @@ class PredictionPage(QWidget):
                 circIdx += 1
                 if circIdx == amountOfCircles: circIdx = 0
 
-
         print('done predicting')
         # cv.imwrite('temp.png', rgb)
+
+
+# class ProgressDialog(QDialog):
+#
+#     def __init__(self, videoPaths, gridPath, modelPath, *args, **kwargs):
+#         super(ProgressDialog, self).__init__(*args, **kwargs)
+#         self.videoPaths = videoPaths
+#         self.gridPath = gridPath
+#         self.modelPath = modelPath
+#         self.initUI()
+#
+#     def initUI(self):
+#         self.setStyleSheet('background: ' + blue)
+#         self.setGeometry(300, 300, 550, 400)
+#         self.setWindowTitle('Annotating Window')
+#
+#         dialogLayout = QGridLayout()
+#
+#         # This is to help center it
+#         titleLabelWrapper = QWidget()
+#         titleLabelWrapperLayout = QHBoxLayout()
+#         titleLabel = QLabel('Progress')
+#         titleLabelWrapperLayout.addWidget(titleLabel, alignment = Qt.AlignHCenter)
+#         titleLabelWrapper.setLayout(titleLabelWrapperLayout)
+#
+#         # This widget will contain the progress bar
+#         # and the label information
+#         centralWidget = QWidget()
+#         centralWidgetLayout = QVBoxLayout()
+#         progressLabel = QLabel('Analyzing')
+#         progressBar = QProgressBar()
+#         progressBar.setFixedWidth(350)
+#
+#         centralWidgetLayout.addWidget(progressLabel, alignment = Qt.AlignHCenter)
+#         centralWidgetLayout.addWidget(progressBar)
+#         centralWidget.setLayout(centralWidgetLayout)
+#
+#         dialogLayout.addWidget(titleLabelWrapper, 0, 0, alignment = Qt.AlignTop)
+#         dialogLayout.addWidget(centralWidget, 0, 0, alignment = Qt.AlignCenter )
+#
+#         self.setLayout(dialogLayout)
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
     from Testing import *
     TestingWindow.testingClass = PredictionPage
     run()
+
+
+
+
+
 
 
 
