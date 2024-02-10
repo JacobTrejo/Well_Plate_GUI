@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import imageio
 import cv2 as cv
@@ -5,18 +7,16 @@ import cv2 as cv
 # from bgsub import bgsubFolder
 # import cv2 as cv
 
-test = 'zebrafish'
-
-testSplit = test.split('.')
-print(testSplit[0])
-exit()
-
-
-x = np.zeros((50,50))
-# res = np.where(x > 0)
-# print(len(res[0]))
-max2 = np.max(x)
-print(max2 > 0)
+import xlsxwriter
+# workbook = xlsxwriter.Workbook('demo.xlsx')
+# worksheet = workbook.add_worksheet()
+#
+# worksheet.write(0,0,'Hello')
+# worksheet.write(0,1,'World')
+# worksheet.write(1,0,1)
+# worksheet.write(2,0,.004)
+#
+# workbook.close()
 
 # grid = np.load('grids/wellplate.npy')
 #

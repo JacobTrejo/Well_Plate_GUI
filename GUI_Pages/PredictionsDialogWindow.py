@@ -24,8 +24,40 @@ from PyQt5 import QtCore, QtGui
 import os
 from GUI_Pages.bgsub import bgsub, bgsubFolder
 import time
+import math
 
 from GUI_Pages.CalculateCC.evaluation_functions import evaluate_prediction
+
+import xlsxwriter
+
+def array2XL(array, outputPath):
+    workbook = xlsxwriter.Workbook(outputPath)
+    worksheet = workbook.add_worksheet()
+
+    worksheet.write(1,0,'Frame #')
+    amountOfFrames = len(array)
+    for frameIdx in range(amountOfFrames):
+        worksheet.write(frameIdx + 2,0, frameIdx + 1)
+    amoutOfFish = array.shape[1]
+
+    step = 2
+    # Writting the title of the fish
+    for fishIdx in range(amoutOfFish):
+        realIdx = fishIdx * step
+        worksheet.write(0, realIdx + 1, 'Fish ' + str(fishIdx + 1))
+        worksheet.write(1, realIdx + 1, 'x')
+        worksheet.write(1, realIdx + 2, 'y')
+
+    for frameIdx in range(amountOfFrames):
+        for fishIdx in range(amoutOfFish):
+            realIdx = fishIdx * step
+            x, y = array[frameIdx, fishIdx, :, 2]
+
+            if not math.isnan(x) and not math.isnan(y):
+                worksheet.write(frameIdx + 2, realIdx + 1, x)
+                worksheet.write(frameIdx + 2, realIdx + 2, y)
+
+    workbook.close()
 
 def folderAndArray2Video(folderPath, array, outputPath):
     frameFiles = os.listdir(folderPath)
@@ -49,6 +81,8 @@ def folderAndArray2Video(folderPath, array, outputPath):
             pts = array[frameIdx]
             for fishIdx in range(amountOfFish):
                 pt = pts[fishIdx].astype(int)
+                # Clipping for the case that wells are near the edge
+                # Perhaps skipping over them is better
                 pt[0, :] = np.clip(pt[0, :], 0, width)
                 pt[1, :] = np.clip(pt[1, :], 0, height)
 
@@ -65,10 +99,11 @@ def folderAndArray2Video(folderPath, array, outputPath):
             pts = array[frameIdx]
             for fishIdx in range(amountOfFish):
                 pt = pts[fishIdx].astype(int)
+                # Clipping for the case that wells are near the edge
+                # Perhaps skipping over them is better
                 pt[0,:] = np.clip(pt[0,:], 0, width)
                 pt[1,:] = np.clip(pt[1,:], 0, height)
                 for ptIdx in range(10):
-                    print((pt[0,ptIdx], pt[1,ptIdx]))
                     cv.circle(rgb, (pt[0,ptIdx], pt[1,ptIdx]), 2, (0,255,0), -1)
                 for ptIdx in range(10, 12):
                     cv.circle(rgb, (pt[0,ptIdx], pt[1,ptIdx]), 2, (0,0,255), -1)
@@ -280,10 +315,13 @@ class ProgressDialog(QDialog):
         # self.predictForFrames(bgsubList[:10], grid)
         fishData = self.predictForFrames(bgsubList, grid)
 
+        # Saving the data appropriately
         if self.outputMode == ProgressDialog.NUMPY:
             np.save(self.saveDirectory + '/' + filefolderName + '.npy', fishData)
         elif self.outputMode == ProgressDialog.VIDEO:
             folderAndArray2Video(folderPath, fishData, self.saveDirectory + '/' + filefolderName + '.avi' )
+        elif self.outputMode == ProgressDialog.EXCEL:
+            array2XL(fishData, self.saveDirectory + '/' + filefolderName + '.xlsx')
 
     def predictForFrames(self, images, grid):
 
@@ -300,7 +338,6 @@ class ProgressDialog(QDialog):
         # NOTE: you might just want shape amountOfImages, amountOfCircles, 2 for COM
         fishData = np.zeros((amountOfImages, amountOfCircles, 2, 12))
 
-        start = time.time()
         for image in images:
             for circ in grid:
                 center = (int(circ[0]), int(circ[1]))
@@ -318,8 +355,10 @@ class ProgressDialog(QDialog):
                 cutOut = cutOut.astype(np.uint8)
 
                 cutOutList.append(cutOut)
-        end = time.time()
-        print('cutout duration: ', end - start)
+
+        # #Testing
+        # for cutoutIdx, cutout in enumerate(cutOutList):
+        #     cv.imwrite('outputs/cutouts/cutout_' + str(cutoutIdx) + '.png', cutout)
         model = self.resnetModel
 
         # create a quantized model instance
@@ -337,15 +376,15 @@ class ProgressDialog(QDialog):
 
         for i, im in enumerate(loader):
             im = im.to(self.device)
-            pose_recon = model_int8(im)
+            # pose_recon = model_int8(im)
+            pose_recon = model(im)
 
             # pose_recon = pose_recon.detach().cpu().numpy()
             # im = np.squeeze(im.detach().cpu().numpy())
 
             # The following is extra computation stuff lets take it out for now
             pose_recon = pose_recon.detach().cpu().numpy()
-            im = np.squeeze(im.cpu().detach().numpy())
-
+            im = np.squeeze(im.cpu().detach().numpy(), axis=1)
             for imIdx in range(im.shape[0]):
                 im1 = im[imIdx, ...]
                 im1 *= 255
@@ -407,13 +446,13 @@ class ProgressDialog(QDialog):
                         print("Finished predicting")
                         print('duration: ', end - start)
                         self.progressLabel.setText('Done')
+                        QApplication.processEvents()
                         return fishData
 
             self.progressBar.setValue(imageIdx)
             self.update()
             QApplication.processEvents()
 
-            print('Updated the progress bar')
 
 
 
