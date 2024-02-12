@@ -1,4 +1,7 @@
+import cv2
+
 from GUI_Pages.Auxilary import *
+from GUI_Pages.videoFileExtensions import isVideoFile
 
 def returnCircleParameters(point1, point2, point3):
     x1, y1 = point1
@@ -1062,10 +1065,18 @@ class DefineWellsPage(QWidget):
             filename = filenames[0]
             try:
                 # this line will allow us to check if an image was selected
-                arrayShape = cv.imread(filename).shape[:2]
+                if isVideoFile(filename):
+                    vidObj = cv.VideoCapture(filename)
+                    ret, frame0 = vidObj.read()
+                    arrayShape = frame0.shape[:2]
+                    cv.imwrite('temp.png', frame0)
+                    filename = 'temp.png'
+                else:
+                    arrayShape = cv.imread(filename).shape[:2]
+
             except:
-                rect = QtCore.QRect(QCursor.pos().x(), QCursor.pos().y(), 120, 50)
-                QToolTip.showText(QCursor.pos(), 'Expected an image file', None, rect, 3000)
+                rect = QtCore.QRect(QCursor.pos().x(), QCursor.pos().y(), 140, 50)
+                QToolTip.showText(QCursor.pos(), 'Expected an image or video file', None, rect, 3000)
                 return
             splitText = filenames[0].split('/')
             self.individualImageViewer.setPixmap(QPixmap(filename))
