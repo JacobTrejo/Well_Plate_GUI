@@ -255,12 +255,12 @@ class PredictionPage(QWidget):
 
         self.frame4 = QFrame()
         # The elements of the fourth frame
-        button4 = QPushButton('Run', self)
+        button4 = QPushButton('Predict', self)
         button4.setStyleSheet(smallerButtonStyleSheet)
         button4.clicked.connect(self.run)
         # adding the elements to the fourth frame
 
-        ccButton = QPushButton('Calculate CC')
+        ccButton = QPushButton('Predict with CC')
         ccButton.setStyleSheet(smallerButtonStyleSheet)
         ccButton.clicked.connect(self.calculateWithCC)
 
@@ -571,6 +571,38 @@ class PredictionPage(QWidget):
         print('You pressed back')
 
     def calculateWithCC(self):
+        # videoPaths = []
+        # progressDialog = ProgressDialog(videoPaths, self.gridPath, self.modelPath, True)
+        # progressDialog.exec_()
+        if self.gridPath is not None and self.modelPath is not None and self.vboxForScrollArea.count() != 0:
+            # Lets run it
+            amount = self.vboxForScrollArea.count()
+            videoPaths = []
+            for labelIdx in range(amount):
+                path = self.vboxForScrollArea.itemAt(labelIdx).widget().path
+                videoPaths.append(path)
+
+            progressDialog = ProgressDialog(videoPaths, self.gridPath, self.modelPath, True)
+            progressDialog.exec_()
+            return
+
+        else:
+            messages = []
+            message1 = 'No Grid Selected'
+            message2 = 'No Model Selected'
+            message3 = 'No Videos Selected'
+
+            if self.gridPath is None: messages.append(message1)
+            if self.modelPath is None: messages.append(message2)
+            if self.vboxForScrollArea.count() == 0: messages.append(message3)
+            count = len(messages)
+            message = '\n'.join(messages)
+            rect = QtCore.QRect(QCursor.pos().x(), QCursor.pos().y(), 100, 50 * count)
+            QToolTip.showText(QCursor.pos(), message, None, rect, 3000)
+            return
+
+
+
         if self.gridPath is None or self.modelPath is None:
             print('You did not load a grid or model')
             return
@@ -779,6 +811,9 @@ class PredictionPage(QWidget):
                     # rgb = np.stack((images[imageIdx], images[imageIdx], images[imageIdx]), axis=2)
 
     def run(self):
+        # videoPaths = []
+        # progressDialog = ProgressDialog(videoPaths, self.gridPath, self.modelPath, False)
+        # progressDialog.exec_()
         if self.gridPath is not None and self.modelPath is not None and self.vboxForScrollArea.count() != 0:
             # Lets run it
             amount = self.vboxForScrollArea.count()
@@ -787,7 +822,7 @@ class PredictionPage(QWidget):
                 path = self.vboxForScrollArea.itemAt(labelIdx).widget().path
                 videoPaths.append(path)
 
-            progressDialog = ProgressDialog(videoPaths, self.gridPath, self.modelPath)
+            progressDialog = ProgressDialog(videoPaths, self.gridPath, self.modelPath, False)
             progressDialog.exec_()
             return
 
