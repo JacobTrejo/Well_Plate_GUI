@@ -1,3 +1,5 @@
+import time
+
 from GUI_Pages.MenuPage import MenuPage
 #from GUI_Pages.PredictionsPage import PredictionPage
 from GUI_Pages.PredictionsPageTesting import PredictionPage

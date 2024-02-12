@@ -16,6 +16,32 @@ def returnCircleParameters(point1, point2, point3):
 
     return (xc, yc), r
 
+def makeGridInBounds(grid, imageSizeX, imageSizeY, x_offset, y_offset):
+    # TODO: Parse is for centers out of bounds
+    grid = np.array(grid)
+
+    grid[:, 0] -= x_offset
+    grid[:, 1] -= y_offset
+
+    r = grid[:,2]
+
+    maxXDiff = imageSizeX - (grid[:,0] + r)
+    maxYDiff = imageSizeY - (grid[:,1] + r)
+    minXDiff = (grid[:,0] - r)
+    minYDiff = (grid[:,1] - r)
+
+    minDiff = np.min((maxXDiff, maxYDiff, minXDiff, minYDiff), axis=0)
+    minDiffIndices = minDiff < 0
+
+
+    grid[minDiffIndices,2] = grid[minDiffIndices,2] + minDiff[minDiffIndices]
+
+    grid[:, 0] += x_offset
+    grid[:, 1] += y_offset
+    # TODO: remove radius of zero
+
+    return grid
+
 def estimateGridFrom2Corners(circle1, circle2):
     (x1, y1), r1 = circle1
     (x2, y2), r2 = circle2
@@ -56,8 +82,6 @@ def estimateGridFrom4Corners(circle1, circle2, circle3, circle4):
 
     amountOfColumns = round(dx / (2 * r)) + 1
     amountOfRows = round(dy / (2 * r)) + 1
-    print('new rows: ', amountOfRows)
-    print('new cols: ', amountOfColumns)
 
     # amountOfRows = 6
     # amountOfColumns = 8
@@ -303,7 +327,7 @@ class GridEstimatorImageViewer(QLabel):
             qp.setBrush(Qt.red)
 
 
-            if len(self.points) < 11:
+            if len(self.points) <= 11:
 
                 for point in self.points:
                     # qp.drawPoint(int(point[0]), int( point[1]) )
@@ -348,7 +372,7 @@ class GridEstimatorImageViewer(QLabel):
                 center, r = returnCircleParameters(translatedPoints[0], translatedPoints[1], translatedPoints[2])
                 center0, r0 = center, r
                 center = QtCore.QPoint(int(center[0]), int(center[1]))
-                qp.drawEllipse(center, int(round(r)), int(round(r)))
+                # qp.drawEllipse(center, int(round(r)), int(round(r)))
 
                 if len(self.points) == 12:
                     circles = []
@@ -375,6 +399,8 @@ class GridEstimatorImageViewer(QLabel):
                     # grid = estimateGridFrom2Corners((center0, r0), (center, r))
 
                     grid = estimateGridFrom4Corners((center0, r0), (center1, r1), (center2, r2), (center3, r3))
+
+                    grid = makeGridInBounds(grid, imWidth, imHeight, x_offset, y_offset)
 
                     self.grid = normalizeGrid(grid, (x_offset, y_offset), (imWidth, imHeight))
                     # grid = unNormalizeGrid(self.grid, (x_offset, y_offset), (imWidth, imHeight))
@@ -454,8 +480,11 @@ class GridEstimatorImageViewer(QLabel):
             if self.selectedObject[0]:
                 x0, y0, r0 = self.grid[self.selectedObject[1]]
                 r = ((x - x0)**2 + (y - y0)**2)**.5
+                if (y0 - r) * (imWidth / imHeight) <= 0 or (y0 + r) * (imWidth / imHeight) >= 1 or (x0 - r) <= 0 or (x0 + r) >= 1: return
                 self.grid[self.selectedObject[1]] = x0, y0, r
             else:
+                r = self.grid[self.selectedObject[1]][-1]
+                if (y - r) * (imWidth / imHeight) <= 0 or (y + r) * (imWidth / imHeight) >= 1 or (x - r) <= 0 or (x + r) >= 1: return
                 self.grid[self.selectedObject[1]] = x, y, self.grid[self.selectedObject[1]][-1]
             self.update()
             return
@@ -719,6 +748,13 @@ class IndividualWellImageViewer(QLabel):
                 translatedPoints = translatedPoints.astype(float)
 
                 circle = returnCircleParameters(translatedPoints[0], translatedPoints[1], translatedPoints[2])
+                (x0, y0), r0 = circle
+                x0, y0 = x0 - x_offset, y0 - y_offset
+                if x0 <= 0 or y0 <= 0: return
+                minDiff = np.min([imWidth - (x0 + r0), imHeight - (y0 + r0), x0 - r0, y0 - r0])
+                if minDiff < 0:
+                    r0 += minDiff
+                    circle = (x0 + x_offset, y0 + y_offset), r0
                 # circle = [center[0], center[1], radius]
                 normalizedCircle = normalizeCircle(circle, (x_offset, y_offset), (imWidth, imHeight))
                 self.grid.append(normalizedCircle)
@@ -726,7 +762,6 @@ class IndividualWellImageViewer(QLabel):
                 # self.grid.append(circle)
                 # self.grid = normalizeGrid(self.grid, (x_offset, y_offset), (imWidth, imHeight))
 
-                print(np.array(self.grid))
                 self.points = []
 
                 self.update()
@@ -757,8 +792,11 @@ class IndividualWellImageViewer(QLabel):
             if self.selectedObject[0]:
                 x0, y0, r0 = self.grid[self.selectedObject[1]]
                 r = ((x - x0)**2 + (y - y0)**2)**.5
+                if (y0 - r) * (imWidth / imHeight) <= 0 or (y0 + r) * (imWidth / imHeight) >= 1 or (x0 - r) <= 0 or (x0 + r) >= 1: return
                 self.grid[self.selectedObject[1]] = x0, y0, r
             else:
+                r = self.grid[self.selectedObject[1]][-1]
+                if (y - r) * (imWidth / imHeight) <= 0 or (y + r) * (imWidth / imHeight) >= 1 or (x - r) <= 0 or (x + r) >= 1: return
                 self.grid[self.selectedObject[1]] = x, y, self.grid[self.selectedObject[1]][-1]
             self.update()
             return
@@ -1022,10 +1060,17 @@ class DefineWellsPage(QWidget):
         filenames = dlg.selectedFiles()
         if len(filenames):
             filename = filenames[0]
+            try:
+                # this line will allow us to check if an image was selected
+                arrayShape = cv.imread(filename).shape[:2]
+            except:
+                rect = QtCore.QRect(QCursor.pos().x(), QCursor.pos().y(), 120, 50)
+                QToolTip.showText(QCursor.pos(), 'Expected an image file', None, rect, 3000)
+                return
             splitText = filenames[0].split('/')
             self.individualImageViewer.setPixmap(QPixmap(filename))
             self.gridEstimatorImageViewer.setPixmap(QPixmap(filename))
-            arrayShape = cv.imread(filename).shape[:2]
+
             self.gridEstimatorImageViewer.setArrayShape(arrayShape)
             self.individualImageViewer.setArrayShape(arrayShape)
 

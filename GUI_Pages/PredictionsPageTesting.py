@@ -455,8 +455,15 @@ class PredictionPage(QWidget):
         filenames = dlg.selectedFiles()
         if len(filenames):
             splitText = filenames[0].split('/')
-            self.modelLabel.setText(splitText[-1])
-            self.modelPath = filenames[0]
+
+            extention = splitText[-1].split('.')[-1]
+            if extention != 'pt':
+                rect = QtCore.QRect(QCursor.pos().x(), QCursor.pos().y(), 120, 50)
+                QToolTip.showText(QCursor.pos(), 'Expected .pt file', None, rect, 3000)
+                return
+            else:
+                self.modelLabel.setText(splitText[-1])
+                self.modelPath = filenames[0]
 
     def getGrid(self):
         dlg = QFileDialog()
@@ -465,8 +472,15 @@ class PredictionPage(QWidget):
         filenames = dlg.selectedFiles()
         if len(filenames):
             splitText = filenames[0].split('/')
-            self.gridLabel.setText(splitText[-1])
-            self.gridPath = filenames[0]
+            extention = splitText[-1].split('.')[-1]
+            if extention != 'npy':
+                # Not the file type we expected
+                rect = QtCore.QRect(QCursor.pos().x(), QCursor.pos().y(), 120, 50)
+                QToolTip.showText(QCursor.pos(), 'Expected .npy file', None, rect, 3000)
+                return
+            else:
+                self.gridLabel.setText(splitText[-1])
+                self.gridPath = filenames[0]
 
     def pressed(self,*arg, **kwargs):
         print('You pressed me')
@@ -765,20 +779,40 @@ class PredictionPage(QWidget):
                     # rgb = np.stack((images[imageIdx], images[imageIdx], images[imageIdx]), axis=2)
 
     def run(self):
+        if self.gridPath is not None and self.modelPath is not None and self.vboxForScrollArea.count() != 0:
+            # Lets run it
+            amount = self.vboxForScrollArea.count()
+            videoPaths = []
+            for labelIdx in range(amount):
+                path = self.vboxForScrollArea.itemAt(labelIdx).widget().path
+                videoPaths.append(path)
+
+            progressDialog = ProgressDialog(videoPaths, self.gridPath, self.modelPath)
+            progressDialog.exec_()
+            return
+
+        else:
+            messages = []
+            message1 = 'No Grid Selected'
+            message2 = 'No Model Selected'
+            message3 = 'No Videos Selected'
+
+            if self.gridPath is None: messages.append(message1)
+            if self.modelPath is None: messages.append(message2)
+            if self.vboxForScrollArea.count() == 0: messages.append(message3)
+            count = len(messages)
+            message = '\n'.join(messages)
+            rect = QtCore.QRect(QCursor.pos().x(), QCursor.pos().y(), 100, 50 * count)
+            QToolTip.showText(QCursor.pos(), message, None, rect, 3000)
+            return
+
+
         # # Real version
         # if self.gridPath is None or self.modelPath is None:
         #     print('You did not load a grid or model')
         #     return
 
-        amount = self.vboxForScrollArea.count()
-        videoPaths = []
-        for labelIdx in range(amount):
-            path = self.vboxForScrollArea.itemAt(labelIdx).widget().path
-            videoPaths.append(path)
 
-        progressDialog = ProgressDialog(videoPaths, self.gridPath, self.modelPath)
-        progressDialog.exec_()
-        return
         print('You are computing after the dialog')
         folderToSaveData = str(QFileDialog.getExistingDirectory(self, "Select Directory To Save Your Data:"))
 

@@ -7,6 +7,45 @@ import cv2 as cv
 # from bgsub import bgsubFolder
 # import cv2 as cv
 
+imageSizeX, imageSizeY = 640, 640
+
+grid = [[10, 50, 11],
+        [200, 200, 20],
+        [635, 630, 10],
+        [50, 50, 20]]
+
+grid = np.array(grid)
+
+c1, c2, c3 = grid[:, 0], grid[:, 1], grid[:, 2]
+arr = np.min((c1, c2), axis=0)
+
+def makeGridInBounds(grid, imageSizeX, imageSizeY):
+    print('GRID')
+    print(grid)
+    return
+    grid = np.array(grid)
+    # TODO: Parse is for centers out of bounds
+
+    r = grid[:,2]
+
+    maxXDiff = imageSizeX - (grid[:,0] + r)
+    maxYDiff = imageSizeY - (grid[:,1] + r)
+    minXDiff = (grid[:,0] - r)
+    minYDiff = (grid[:,1] - r)
+
+    minDiff = np.min((maxXDiff, maxYDiff, minXDiff, minYDiff), axis=0)
+    minDiffIndices = minDiff < 0
+
+    grid[minDiffIndices,2] = grid[minDiffIndices,2] + minDiff[minDiffIndices]
+
+    # TODO: remove radius of zero
+
+    return grid
+
+grid2 = makeGridInBounds(grid, imageSizeX, imageSizeY)
+
+jj = 5
+
 import xlsxwriter
 # workbook = xlsxwriter.Workbook('demo.xlsx')
 # worksheet = workbook.add_worksheet()
