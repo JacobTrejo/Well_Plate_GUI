@@ -62,6 +62,20 @@ smallerButtonStyleSheet = \
                 color: white;
             }
             '''
-
+invertedSmallerButtonStyleSheet = \
+'''
+            border: 3px solid ''' + whiteBlue + ''';
+            color: ''' + white + ''';
+            background:  ''' + whiteBlue + ''';
+            /* color: white; */
+            font-family: 'shanti';
+            border-radius: 10px;
+            padding: 2px 0;
+            margin-top: 2px}
+            *:hover{
+                background:  ''' + white + ''';
+                color: white;
+            }
+            '''
 
 

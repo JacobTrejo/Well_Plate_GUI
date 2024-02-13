@@ -44,6 +44,7 @@ class ImageViewer(QLabel):
         super().__init__()
         self.setPixmap(pixmap)
         self.grid = None
+        self.shouldDrawNumbers = False
 
     def setPixmap(self, pixmap):
         if self.pixmap != pixmap:
@@ -85,7 +86,7 @@ class ImageViewer(QLabel):
         r.moveCenter(self.rect().center())
         qp.drawPixmap(r, self.scaled)
 
-        if self.grid is not None:
+        if self.grid is not None and not self.shouldDrawNumbers:
             qp.setPen(Qt.magenta)
             qp.setBrush(QBrush(QColor(0, 0, 0, 0)))
 
@@ -101,6 +102,22 @@ class ImageViewer(QLabel):
                 center = QtCore.QPoint(x, y)
                 qp.drawEllipse(center, r, r)
 
+        if self.grid is not None and self.shouldDrawNumbers:
+            qp.setPen(Qt.magenta)
+            qp.setBrush(QBrush(QColor(0, 0, 0, 0)))
+
+            imHeight, imWidth = self.scaled.height(), self.scaled.width()
+
+            x_offset = (self.width() - imWidth) / 2
+            y_offset = (self.height() - imHeight) / 2
+            grid = unNormalizeGrid(self.grid, (x_offset, y_offset), (imWidth, imHeight))
+            for circleIdx, circle in enumerate(grid):
+                x, y, r = circle
+                # print(x, y, r)
+                # x, y, r = int(round(x)), int(round(y)), int(round(r))
+                center = QtCore.QPoint(x, y)
+                qp.drawEllipse(center, r, r)
+                qp.drawText(center, str(circleIdx + 1))
 
 class FolderVideoPlayer(QWidget):
 

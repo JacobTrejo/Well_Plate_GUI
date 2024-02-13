@@ -69,7 +69,7 @@ def estimateGridFrom2Corners(circle1, circle2):
 
     return(grid)
 
-def estimateGridFrom4Corners(circle1, circle2, circle3, circle4):
+def estimateGridFrom4Corners(circle1, circle2, circle3, circle4, amountOfRows = None, amountOfColumns = None):
     (x1, y1), r1 = circle1
     (x2, y2), r2 = circle2
     (x3, y3), r3 = circle3
@@ -83,11 +83,8 @@ def estimateGridFrom4Corners(circle1, circle2, circle3, circle4):
     dx = bx - sx
     dy = by - sy
 
-    amountOfColumns = round(dx / (2 * r)) + 1
-    amountOfRows = round(dy / (2 * r)) + 1
-
-    # amountOfRows = 6
-    # amountOfColumns = 8
+    if amountOfRows is None: amountOfRows = round(dy / (2 * r)) + 1
+    if amountOfColumns is None: amountOfColumns = round(dx / (2 * r)) + 1
 
     x_direction_rows_first = (x3 - x1) / (amountOfRows - 1)
     y_direction_rows_first = (y3 - y1) / (amountOfRows - 1)
@@ -297,12 +294,22 @@ class GridEstimatorImageViewer(QLabel):
             x_offset = (self.width() - imWidth) / 2
             y_offset = (self.height() - imHeight) / 2
             grid = unNormalizeGrid(self.grid, (x_offset, y_offset), (imWidth, imHeight))
-            for circle in grid:
-                x, y, r = circle
-                # print(x, y, r)
-                # x, y, r = int(round(x)), int(round(y)), int(round(r))
-                center = QtCore.QPoint(x, y)
-                qp.drawEllipse(center, r, r)
+
+            if self.parent().parent().parent().parent().showNumbers:
+                for circleIdx, circle in enumerate(grid):
+                    x, y, r = circle
+                    # print(x, y, r)
+                    # x, y, r = int(round(x)), int(round(y)), int(round(r))
+                    center = QtCore.QPoint(x, y)
+                    qp.drawEllipse(center, r, r)
+                    qp.drawText(center, str(circleIdx + 1))
+            else:
+                for circle in grid:
+                    x, y, r = circle
+                    # print(x, y, r)
+                    # x, y, r = int(round(x)), int(round(y)), int(round(r))
+                    center = QtCore.QPoint(x, y)
+                    qp.drawEllipse(center, r, r)
 
             if self.selectedObject:
                 qp.setPen(Qt.cyan)
@@ -401,7 +408,20 @@ class GridEstimatorImageViewer(QLabel):
                     #
                     # grid = estimateGridFrom2Corners((center0, r0), (center, r))
 
-                    grid = estimateGridFrom4Corners((center0, r0), (center1, r1), (center2, r2), (center3, r3))
+                    # NOTE: the following two lines depend on the parent
+                    rowsText = self.parent().parent().parent().parent().rowsInput.text()
+                    columnsText = self.parent().parent().parent().parent().columnsInput.text()
+
+                    if rowsText.isnumeric() and columnsText.isnumeric():
+                        rowsText = int(rowsText)
+                        columnsText = int(columnsText)
+                        grid = estimateGridFrom4Corners((center0, r0), (center1, r1),
+                                                        (center2, r2), (center3, r3),
+                                                        rowsText, columnsText)
+
+                    else:
+                        grid = estimateGridFrom4Corners((center0, r0), (center1, r1),
+                                                        (center2, r2), (center3, r3))
 
                     grid = makeGridInBounds(grid, imWidth, imHeight, x_offset, y_offset)
 
@@ -611,12 +631,21 @@ class IndividualWellImageViewer(QLabel):
 
             grid = unNormalizeGrid(self.grid, (x_offset, y_offset), (imWidth, imHeight))
 
-            for circle in grid:
-                x, y, r = circle
-                # print(x, y, r)
-                # x, y, r = int(round(x)), int(round(y)), int(round(r))
-                center = QtCore.QPoint(x, y)
-                qp.drawEllipse(center, r, r)
+            if self.parent().parent().parent().parent().showNumbers:
+                for circleIdx, circle in enumerate(grid):
+                    x, y, r = circle
+                    # print(x, y, r)
+                    # x, y, r = int(round(x)), int(round(y)), int(round(r))
+                    center = QtCore.QPoint(x, y)
+                    qp.drawEllipse(center, r, r)
+                    qp.drawText(center,str(circleIdx + 1))
+            else:
+                for circle in grid:
+                    x, y, r = circle
+                    # print(x, y, r)
+                    # x, y, r = int(round(x)), int(round(y)), int(round(r))
+                    center = QtCore.QPoint(x, y)
+                    qp.drawEllipse(center, r, r)
 
             if self.selectedObject:
                 qp.setPen(Qt.cyan)
@@ -853,6 +882,7 @@ class DefineWellsPage(QWidget):
 
     def __init__(self, *args, **kwargs):
         super(DefineWellsPage, self).__init__(*args, **kwargs)
+        self.showNumbers = False
         self.initUI()
 
     def initUI(self):
@@ -952,13 +982,26 @@ class DefineWellsPage(QWidget):
 
 
         middleFrame = QWidget()
-        middleFrame.setStyleSheet('border: 1px solid')
+        middleFrame.setObjectName('middleFrame')
+        middleFrame.setStyleSheet('QWidget#middleFrame {border: 1px solid;}')
         middleFrameLayout = QVBoxLayout()
-        middleFrameLayout.setContentsMargins(0,0,0,0)
+        middleFrameLayout.setContentsMargins(1,1,1,1)
         middleFrameLayout.setSpacing(0)
-        middleFrameTitle = QLabel('Mode')
-        middleFrameTitle.setStyleSheet('border-bottom: 0px')
+        middleFrameTitle = QLabel('Settings')
+        middleFrameTitle.setStyleSheet('border-bottom: 1px solid;')
         middleFrameTitle.setAlignment(Qt.AlignHCenter)
+
+        radioButtonsRow = QWidget()
+        radioButtonsRow.setObjectName('radioButtonsRow')
+        radioButtonsRow.setStyleSheet('QWidget#radioButtonsRow {border-bottom: 1px solid}')
+        radioButtonsRowLayout = QVBoxLayout()
+        radioButtonsRowLayout.setContentsMargins(0,0,0,1)
+        radioButtonsRowLayout.setSpacing(0)
+
+        radioButtonsRowTitle = QLabel('Mode')
+        # radioButtonsRowTitle.setStyleSheet('border-left: 1px solid;' +
+        #                                    'border-right: 1px solid;')
+
         radioButtons = QWidget()
         # radioButtons.setStyleSheet('border: 0px')
         radioButtonsLayout = QHBoxLayout()
@@ -968,17 +1011,76 @@ class DefineWellsPage(QWidget):
         estimateButton.setChecked(True)
         estimateButton.mode = 'ESTIMATE'
         estimateButton.toggled.connect(self.onToggle)
-        estimateButton.setStyleSheet('border: 0px')
         radioButtonsLayout.addWidget(estimateButton)
 
         individualButton = QRadioButton('Individual')
         individualButton.mode = 'INDIVIDUAL'
         individualButton.toggled.connect(self.onToggle)
-        individualButton.setStyleSheet('border: 0px')
+        # individualButton.setStyleSheet('border: 0px')
         radioButtonsLayout.addWidget(individualButton)
         radioButtons.setLayout(radioButtonsLayout)
+
+        radioButtonsRowLayout.addWidget(radioButtonsRowTitle, 1)
+        radioButtonsRowLayout.addWidget(radioButtons, 3)
+        radioButtonsRow.setLayout(radioButtonsRowLayout)
+
+        # Hint
+        hintsRow = QWidget()
+        hintsRow.setObjectName('hintsRow')
+        hintsRow.setStyleSheet('QWidget#hintsRow {border-bottom: 1px solid;}')
+        hintsRowLayout = QVBoxLayout()
+        hintsRowLayout.setContentsMargins(0,0,0,1)
+        hintsRowLayout.setSpacing(0)
+        # hintsRowLayout.setStyleSheet('border: 0px')
+
+        hintLabel = QLabel('Hint')
+        # hintLabel.setStyleSheet('border: 1px solid;')
+
+        hintsInputs = QWidget()
+        hintsInputsLayout = QHBoxLayout()
+        hintsInputsLayout.setContentsMargins(0,0,0,0)
+
+        rowsLabel = QLabel('Rows: ')
+        # rowsLabel.setStyleSheet('border: 0px;' +
+        #                         'border-bottom: 1px solid;'+
+        #                         'border-left: 1px solid;')
+        self.rowsInput = QLineEdit(' ')
+
+        columnsLabel = QLabel('Columns: ')
+        # columnsLabel.setStyleSheet('border: 0px;' +
+        #                'border-bottom: 1px solid;')
+        self.columnsInput = QLineEdit(' ')
+        # columnsInput.setStyleSheet('border: 0px;' +
+        #                         'border-bottom: 1px solid;'+
+        #                         'border-right: 1px solid;')
+        hintsInputsLayout.addWidget(rowsLabel)
+        hintsInputsLayout.addWidget(self.rowsInput)
+        hintsInputsLayout.addWidget(columnsLabel)
+        hintsInputsLayout.addWidget(self.columnsInput)
+        hintsInputs.setLayout(hintsInputsLayout)
+
+        hintsRowLayout.addWidget(hintLabel, 1)
+        hintsRowLayout.addWidget(hintsInputs, 3)
+        hintsRow.setLayout(hintsRowLayout)
+
+        # The button for toggling
+        toggleButtonWrapper = QWidget()
+        # toggleButtonWrapper.setStyleSheet('border: 0px;' +
+        #                                   'border-bottom: 1px solid;')
+        toggleButtonWrapperLayout = QVBoxLayout()
+        # toggleButtonWrapperLayout.setStyleSheet('border: 0px')
+
+        self.toggleButton = QPushButton(' Show Numbers ')
+        self.toggleButton.setStyleSheet(smallerButtonStyleSheet)
+        toggleButtonWrapperLayout.addWidget(self.toggleButton)
+        self.toggleButton.clicked.connect(self.showNumbersButton)
+        toggleButtonWrapper.setLayout(toggleButtonWrapperLayout)
+
         middleFrameLayout.addWidget(middleFrameTitle, 0)
-        middleFrameLayout.addWidget(radioButtons, 1)
+        middleFrameLayout.addWidget(radioButtonsRow, 2)
+        middleFrameLayout.addWidget(hintsRow, 2)
+        middleFrameLayout.addWidget(toggleButtonWrapper, 1, alignment = Qt.AlignHCenter)
+
         # middleFrame.setStyleSheet('border: 1px solid')
         middleFrame.setLayout(middleFrameLayout)
 
@@ -1025,11 +1127,22 @@ class DefineWellsPage(QWidget):
         # self.setCentralWidget(self.centralWidget)
 
         # self.show()
+    def showNumbersButton(self):
+        self.showNumbers = not self.showNumbers
+        self.gridEstimatorImageViewer.update()
+        self.individualImageViewer.update()
+
+        if self.showNumbers:
+            self.toggleButton.setStyleSheet(invertedSmallerButtonStyleSheet)
+        else:
+            self.toggleButton.setStyleSheet(smallerButtonStyleSheet)
 
     def onToggle(self):
         radioButton = self.sender()
         if radioButton.mode == "INDIVIDUAL":
             self.stack.setCurrentIndex(1)
+            self.rowsInput.setEnabled(False)
+            self.columnsInput.setEnabled(False)
             # self.gridEstimatorImageViewer = IndividualWellImageViewer(QPixmap('wellplate.png'))
             # # self.mainWidgetLayout.replaceWidget(
             # #     self.gridEstimatorImageViewer, IndividualWellImageViewer(QPixmap('wellplate.png')))
@@ -1052,6 +1165,8 @@ class DefineWellsPage(QWidget):
             # self.setCentralWidget(self.centralWidget)
         else:
             self.stack.setCurrentIndex(0)
+            self.rowsInput.setEnabled(True)
+            self.columnsInput.setEnabled(True)
             # self.gridEstimatorImageViewer = GridEstimatorImageViewer(QPixmap('wellplate.png'))
             # self.update()
 

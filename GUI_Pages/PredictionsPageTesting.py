@@ -152,6 +152,8 @@ class PredictionPage(QWidget):
     def __init__(self, *args, **kwargs):
         super(PredictionPage, self).__init__(*args, **kwargs)
 
+        self.gridLabelPressCount = 0
+
         self.fileNames = None
         self.ccThreshold = .8
 
@@ -521,20 +523,27 @@ class PredictionPage(QWidget):
         # TODO: remove grids
 
     def pressedGridLabel(self, event):
+        self.gridLabelPressCount = (self.gridLabelPressCount + 1) % 3
+        print('count: ', self.gridLabelPressCount)
         # if len(self.drawingItems) > 0:
         #     for item in self.drawingItems:
         #         self.widget._scene.removeItem(item)
         #     self.drawingItems = []
         #     return
-        if self.widget.grid is not None or self.folderVideoPlayer.imageViewer.grid is not None:
-            self.widget.removeGrid()
-            self.folderVideoPlayer.removeGrid()
-        else:
+
+        if self.gridLabelPressCount == 0:
+            # We will remove the circles, but first we have to check that the widgets are not none
+            if self.widget.grid is not None or self.folderVideoPlayer.imageViewer.grid is not None:
+                self.widget.removeGrid()
+                self.folderVideoPlayer.removeGrid()
+        elif self.gridLabelPressCount == 1:
+            # We will draw the circles
             print('You pressed the grid label')
             grid = np.load(self.gridPath)
 
             if self.leftWidgetStack.currentIndex() == 1:
                 # We are in the folder video Player
+                self.folderVideoPlayer.imageViewer.shouldDrawNumbers = False
                 self.folderVideoPlayer.setGrid(grid)
             else:
                 self.widget.setGrid(grid)
@@ -547,13 +556,45 @@ class PredictionPage(QWidget):
                     diameter = 2 * r
 
                     ellipse_item = QtWidgets.QGraphicsEllipseItem((x) - (diameter / 2),
-                                                                        (y) - (diameter / 2), diameter, diameter)
+                                                                  (y) - (diameter / 2), diameter, diameter)
                     ellipse_item.setPen(QtGui.QPen(QtCore.Qt.red))
                     self.drawingItems.append(ellipse_item)
                     self.widget.drawingItems.append(ellipse_item)
                     self.widget._scene.addItem(ellipse_item)
+        else:
+            if self.leftWidgetStack.currentIndex() == 1:
+                self.folderVideoPlayer.imageViewer.shouldDrawNumbers = True
+                self.folderVideoPlayer.imageViewer.update()
 
-            return
+        # if self.widget.grid is not None or self.folderVideoPlayer.imageViewer.grid is not None:
+        #     self.widget.removeGrid()
+        #     self.folderVideoPlayer.removeGrid()
+        # else:
+        #     print('You pressed the grid label')
+        #     grid = np.load(self.gridPath)
+        #
+        #     if self.leftWidgetStack.currentIndex() == 1:
+        #         # We are in the folder video Player
+        #         self.folderVideoPlayer.setGrid(grid)
+        #     else:
+        #         self.widget.setGrid(grid)
+        #
+        #         newWidth = self.widget.newWidth
+        #         copyGrid = np.copy(grid)
+        #         copyGrid *= newWidth
+        #         for circle in copyGrid:
+        #             x, y, r = circle
+        #             diameter = 2 * r
+        #
+        #             ellipse_item = QtWidgets.QGraphicsEllipseItem((x) - (diameter / 2),
+        #                                                                 (y) - (diameter / 2), diameter, diameter)
+        #             ellipse_item.setPen(QtGui.QPen(QtCore.Qt.red))
+        #             self.drawingItems.append(ellipse_item)
+        #             self.widget.drawingItems.append(ellipse_item)
+        #             self.widget._scene.addItem(ellipse_item)
+        #
+        #     return
+
             # newWidth = self.widget.newWidth
             # grid *= newWidth
             # for circle in grid:
