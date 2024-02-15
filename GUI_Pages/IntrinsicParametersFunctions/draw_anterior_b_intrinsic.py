@@ -85,7 +85,6 @@ def draw_anterior_b_intrinsic(seglen, theta, gamma, phi, dh1, dh2, dimension, si
     project_eye2 = project(model_eye2, dimension)
 
     project_eye1 = 2 * (sigmoid(project_eye1, 0.5) - 0.7) * eyes_br
-
     project_eye2 = 2 * (sigmoid(project_eye2, 0.5) - 0.7) * eyes_br
     project_head = project(model_head, dimension)
     project_head = 2 * (sigmoid(project_head, 0.4) - 0.5) * head_br

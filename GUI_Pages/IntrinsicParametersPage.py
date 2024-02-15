@@ -1325,6 +1325,12 @@ class AnnotationsDialog(QDialog):
             _, frameIdx, crops, points = labelData
             sy, by, sx, bx = crops
             cutOut = (bgsubVid[frameIdx])[sy: by + 1, sx: bx + 1]
+            # Normalizing the image
+            cutoutMaxValue = np.max(cutOut)
+            cutOut = cutOut.astype(float)
+            cutOut *= 255 / cutoutMaxValue
+            cutOut = cutOut.astype(np.uint8)
+
             sizeY, sizeX = cutOut.shape[:2]
             points[0] = [points[0][0] * sizeX, points[0][1] * sizeY]
             points[1] = [points[1][0] * sizeX, points[1][1] * sizeY]
@@ -1342,6 +1348,11 @@ class AnnotationsDialog(QDialog):
             _, frameIdx, crops, points = labelData
             sy, by, sx, bx = crops
             cutOut = (bgsubVid[frameIdx])[sy: by + 1, sx: bx + 1]
+            # Normalizing the image
+            cutoutMaxValue = np.max(cutOut)
+            cutOut = cutOut.astype(float)
+            cutOut *= 255 / cutoutMaxValue
+            cutOut = cutOut.astype(np.uint8)
             # cv.imwrite('temp.png', cutOut)
             # print('points: ', points)
             sizeY, sizeX = cutOut.shape[:2]
