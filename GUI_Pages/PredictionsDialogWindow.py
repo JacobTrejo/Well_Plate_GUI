@@ -25,7 +25,7 @@ import os
 from GUI_Pages.bgsub import bgsub, bgsubFolder
 import time
 import math
-
+from multiprocessing import Pool, Manager
 from GUI_Pages.CalculateCC.evaluation_functions import evaluate_prediction
 
 import xlsxwriter
@@ -80,7 +80,9 @@ def folderAndArray2Video(folderPath, array, outputPath):
 
             pts = array[frameIdx]
             for fishIdx in range(amountOfFish):
+                if math.isnan(pts[fishIdx, 0, 0]): continue
                 pt = pts[fishIdx].astype(int)
+
                 # Clipping for the case that wells are near the edge
                 # Perhaps skipping over them is better
                 pt[0, :] = np.clip(pt[0, :], 0, width)
@@ -98,6 +100,7 @@ def folderAndArray2Video(folderPath, array, outputPath):
 
             pts = array[frameIdx]
             for fishIdx in range(amountOfFish):
+                if math.isnan((pts[fishIdx, 0, 0])): continue
                 pt = pts[fishIdx].astype(int)
                 # Clipping for the case that wells are near the edge
                 # Perhaps skipping over them is better
@@ -433,7 +436,32 @@ class ProgressDialog(QDialog):
         frame0 = bgsubList[0]
         # self.predictForFrame(frame0, grid)
         # self.predictForFrames(bgsubList[:10], grid)
-        fishData = self.predictForFrames(bgsubList, grid)
+        amountOfImages = len(bgsubList)
+        amountOfCircles = len(grid)
+        fishData = np.zeros((amountOfImages, amountOfCircles, 2, 12))
+        # Analyzing the data in batches
+        batchsize = 100
+        amountOfBatches = int(np.ceil(amountOfImages / batchsize))
+
+        self.progressBar.setRange(0, amountOfImages - 1)
+        for batchIdx in range(amountOfBatches - 1):
+            startingFrame = batchIdx * batchsize
+            endingFrame = (batchIdx + 1) * batchsize
+            fishDataInstance = self.predictForFrames(bgsubList[startingFrame:endingFrame], grid)
+            fishData[startingFrame: endingFrame] = fishDataInstance
+
+            self.progressBar.setValue(endingFrame)
+            self.update()
+            QApplication.processEvents()
+        # The final batch
+        startingFrame = (amountOfBatches - 1) * batchsize
+        fishDataInstance = self.predictForFrames(bgsubList[startingFrame:], grid)
+        fishData[startingFrame:] = fishDataInstance
+        self.progressBar.setValue(amountOfImages)
+        self.progressLabel.setText('Done')
+        self.update()
+        QApplication.processEvents()
+
 
         # Saving the data appropriately
         if self.outputMode == ProgressDialog.NUMPY:
@@ -454,7 +482,7 @@ class ProgressDialog(QDialog):
         imageIdx = 0
         amountOfCircles = grid.shape[0]
         amountOfImages = len(images)
-        self.progressBar.setRange(0, amountOfImages - 1)
+
         # NOTE: you might just want shape amountOfImages, amountOfCircles, 2 for COM
         fishData = np.zeros((amountOfImages, amountOfCircles, 2, 12))
 
@@ -565,13 +593,8 @@ class ProgressDialog(QDialog):
                         end = time.time()
                         print("Finished predicting")
                         print('duration: ', end - start)
-                        self.progressLabel.setText('Done')
-                        QApplication.processEvents()
                         return fishData
 
-            self.progressBar.setValue(imageIdx)
-            self.update()
-            QApplication.processEvents()
 
 
     def runWithCC(self):
@@ -661,10 +684,45 @@ class ProgressDialog(QDialog):
         frame0 = bgsubList[0]
         # self.predictForFrame(frame0, grid)
         # self.predictForFrames(bgsubList[:10], grid)
+
+        amountOfFrames = len(bgsubList)
+        amountOfCircles = len(grid)
+        self.progressBar.setRange(0, amountOfFrames - 1)
+        fishData = np.zeros((amountOfFrames, amountOfCircles, 2, 12))
+        ccData = np.zeros((amountOfFrames, amountOfCircles))
+
+        batchsize = 100
+        amountOfBatches = int(np.ceil(amountOfFrames/batchsize))
+        for batchIdx in range(amountOfBatches - 1):
+            startingFrame = batchIdx * batchsize
+            endingFrame = (batchIdx + 1) * batchsize
+
+            if self.ccMode == ProgressDialog.CLIPCC:
+                fishDataInstance, ccDataInstance = self.predictForFramesWithCCThreshold(bgsubList[startingFrame: endingFrame], grid)
+            else:
+                fishDataInstance, ccDataInstance = self.predictForFramesWithCCNoThreshold(bgsubList[startingFrame: endingFrame], grid)
+
+            fishData[startingFrame:endingFrame] = fishDataInstance
+            ccData[startingFrame:endingFrame] = ccDataInstance
+
+            self.progressBar.setValue(endingFrame)
+            self.update()
+            QApplication.processEvents()
+
+        startingFrame = (amountOfBatches - 1) * batchsize
         if self.ccMode == ProgressDialog.CLIPCC:
-            fishData, ccData = self.predictForFramesWithCCThreshold(bgsubList, grid)
+            fishDataInstance, ccDataInstance = self.predictForFramesWithCCThreshold(
+                bgsubList[startingFrame: ], grid)
         else:
-            fishData, ccData = self.predictForFramesWithCCNoThreshold(bgsubList, grid)
+            fishDataInstance, ccDataInstance = self.predictForFramesWithCCNoThreshold(
+                bgsubList[startingFrame: ], grid)
+        fishData[startingFrame:] = fishDataInstance
+        ccData[startingFrame:] = ccDataInstance
+        self.progressBar.setValue(amountOfFrames)
+        self.progressLabel.setText('Done')
+        self.update()
+        QApplication.processEvents()
+
 
         # Saving the data appropriately
         if self.outputMode == ProgressDialog.NUMPY:
@@ -687,7 +745,7 @@ class ProgressDialog(QDialog):
         imageIdx = 0
         amountOfCircles = grid.shape[0]
         amountOfImages = len(images)
-        self.progressBar.setRange(0, amountOfImages - 1)
+        # self.progressBar.setRange(0, amountOfImages - 1)
         # NOTE: you might just want shape amountOfImages, amountOfCircles, 2 for COM
         fishData = np.zeros((amountOfImages, amountOfCircles, 2, 12))
         ccFishData = np.zeros((amountOfImages, amountOfCircles))
@@ -803,13 +861,13 @@ class ProgressDialog(QDialog):
                         end = time.time()
                         print("Finished predicting")
                         print('duration: ', end - start)
-                        self.progressLabel.setText('Done')
-                        QApplication.processEvents()
+                        # self.progressLabel.setText('Done')
+                        # QApplication.processEvents()
                         return fishData, ccFishData
 
-            self.progressBar.setValue(imageIdx)
-            self.update()
-            QApplication.processEvents()
+            # self.progressBar.setValue(imageIdx)
+            # self.update()
+            # QApplication.processEvents()
 
     def predictForFramesWithCCNoThreshold(self, images, grid):
 
@@ -822,7 +880,7 @@ class ProgressDialog(QDialog):
         imageIdx = 0
         amountOfCircles = grid.shape[0]
         amountOfImages = len(images)
-        self.progressBar.setRange(0, amountOfImages - 1)
+        # self.progressBar.setRange(0, amountOfImages - 1)
         # NOTE: you might just want shape amountOfImages, amountOfCircles, 2 for COM
         fishData = np.zeros((amountOfImages, amountOfCircles, 2, 12))
         ccData = np.zeros((amountOfImages, amountOfCircles))
@@ -862,7 +920,7 @@ class ProgressDialog(QDialog):
         data = CustomImageDataset(cutOutList, transform=transform)
         loader = DataLoader(data, batch_size=self.batch_size, shuffle=False, num_workers=self.nworkers,
                             prefetch_factor=self.pftch_factor, persistent_workers=True)
-
+        ccList = []
         for i, im in enumerate(loader):
             im = im.to(self.device)
             # pose_recon = model_int8(im)
@@ -934,13 +992,13 @@ class ProgressDialog(QDialog):
                         end = time.time()
                         print("Finished predicting")
                         print('duration: ', end - start)
-                        self.progressLabel.setText('Done')
-                        QApplication.processEvents()
+                        # self.progressLabel.setText('Done')
+                        # QApplication.processEvents()
                         return fishData, ccData
 
-            self.progressBar.setValue(imageIdx)
-            self.update()
-            QApplication.processEvents()
+            # self.progressBar.setValue(imageIdx)
+            # self.update()
+            # QApplication.processEvents()
 
 
 
