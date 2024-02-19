@@ -943,6 +943,7 @@ class ProgressDialog(QDialog):
                     fishData[imageIdx, circIdx, ...] = np.nan
                     ccData[imageIdx, circIdx] = np.nan
                 else:
+                    ccList.append((im1, pt1, imageIdx, circIdx))
                     cc, _ = evaluate_prediction(im1, pt1)
 
                     # pt1 = pt1.astype(int)

@@ -1110,13 +1110,21 @@ class AnnotationsDialog(QDialog):
 
         # Creating the third Page
         thirdPage = QWidget()
-        thirdPageLayout = QVBoxLayout()
+        thirdPageLayout = QGridLayout()
         thirdPageTitle = QLabel('Progress')
         thirdPageTitle.setAlignment(Qt.AlignHCenter)
-        thirdPageLayout.addWidget(thirdPageTitle, 0)
-
+        thirdPageLayout.addWidget(thirdPageTitle,0,0, alignment = Qt.AlignTop)
+        thirdPageMainWidget = QWidget()
+        thirdPageMainWidgetLayout = QVBoxLayout()
+        self.thirdPageMainWidgetProgressLabel = QLabel('Analyzing ' + str(self.amountOfCutouts) + ' Fish')
+        self.thirdPageMainWidgetProgressLabel.setAlignment(Qt.AlignHCenter)
         self.progressBar = QProgressBar()
-        thirdPageLayout.addWidget(self.progressBar, alignment = Qt.AlignVCenter)
+        self.progressBar.setAlignment(Qt.AlignHCenter)
+        thirdPageMainWidgetLayout.addWidget(self.thirdPageMainWidgetProgressLabel)
+        thirdPageMainWidgetLayout.addWidget(self.progressBar)
+        thirdPageMainWidget.setLayout(thirdPageMainWidgetLayout)
+
+        thirdPageLayout.addWidget(thirdPageMainWidget,0, 0, alignment = Qt.AlignVCenter)
         thirdPage.setLayout(thirdPageLayout)
 
         # Adding the pages to our annotations window, aka self
@@ -1230,12 +1238,15 @@ class AnnotationsDialog(QDialog):
     def calculate(self):
         self.stackWidget.setCurrentIndex(2)
         # Choosing the location in which to save your yaml file
-        dlg = QFileDialog()
-        # dlg.setFileMode(QFileDialog.AnyFile)
-        # # dlg.setFilter("Text files (*.txt)")
-        # dlg.exec_()
-        filenames = dlg.getSaveFileName()
+        # dlg = QFileDialog()
+        # # dlg.setFileMode(QFileDialog.AnyFile)
+        # # # dlg.setFilter("Text files (*.txt)")
+        # # dlg.exec_()
+        # filenames = dlg.getSaveFileName()
 
+        filenames = QFileDialog.getSaveFileName()
+        time.sleep(1)
+        QApplication.processEvents()
         if len(filenames):
             filename = filenames[0]
 
@@ -1313,6 +1324,8 @@ class AnnotationsDialog(QDialog):
             ipFile.write(meanLine)
 
         ipFile.close()
+
+        self.thirdPageMainWidgetProgressLabel.setText('Done')
 
 
     def getDataFromVideo(self, vid):
