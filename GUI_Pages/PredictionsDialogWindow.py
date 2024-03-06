@@ -30,6 +30,117 @@ from GUI_Pages.CalculateCC.evaluation_functions import evaluate_prediction
 
 import xlsxwriter
 
+def array2Velocity(fishData, fps = 50):
+    COMVs = []
+    maxLenght = 0
+    for fishIdx in range(fishData.shape[1]):
+
+        Xs = fishData[:, fishIdx, 0, 2]
+        Ys = fishData[:, fishIdx, 1, 2]
+
+        smoothXs = Xs
+        smoothYs = Ys
+        # smoothXs, smoothYs = fishPoseList[fishIdx]
+
+        # COMX = smoothXs[2]
+        # COMY = smoothYs[2]
+        COMX = Xs
+        COMY = Ys
+
+        DT = (1 / fps)
+        DX = COMX[1:] - COMX[:-1]
+        DY = COMY[1:] - COMY[:-1]
+
+        VX = DX / DT
+        VY = DY / DT
+
+        length = (VX ** 2 + VY ** 2) ** .5
+        VXN = VX / length
+        VYN = VY / length
+
+        COMVs.append((VXN, VYN, length))
+
+    return COMVs
+
+def velocityArray2XL(array, ccData, outputPath, threshold = .4):
+    workbook = xlsxwriter.Workbook(outputPath)
+    worksheet = workbook.add_worksheet()
+
+    worksheet.write(1,0,'Frame #')
+    amountOfFrames = len(array)
+    amountOfFrames = array.shape[2]
+    for frameIdx in range(amountOfFrames):
+        worksheet.write(frameIdx + 2,0, frameIdx + 1)
+    amoutOfFish = array.shape[1]
+    amoutOfFish = array.shape[0]
+
+    step = 3
+    # Writing the title of the fish
+    for fishIdx in range(amoutOfFish):
+        realIdx = fishIdx * step
+        worksheet.write(0, realIdx + 1, 'Fish ' + str(fishIdx + 1))
+        worksheet.write(1, realIdx + 1, 'Vx')
+        worksheet.write(1, realIdx + 2, 'Vy')
+        worksheet.write(1, realIdx + 3, 'Speed')
+
+    for frameIdx in range(amountOfFrames):
+        for fishIdx in range(amoutOfFish):
+            realIdx = fishIdx * step
+            vxn, vyn, length = array[fishIdx, :, frameIdx]
+            cc = ccData[frameIdx, fishIdx]
+            if math.isnan(cc) or cc < threshold or np.any(np.isnan([vxn, vyn, length])): continue
+            worksheet.write(frameIdx + 2, realIdx + 1, vxn * length)
+            worksheet.write(frameIdx + 2, realIdx + 2, vyn * length)
+            worksheet.write(frameIdx + 2, realIdx + 3, length)
+
+    workbook.close()
+
+def folderAndVelocities2Video(folderPath, COMVs, fishData, outputPath, fps = 50):
+    frameNames = os.listdir(folderPath)
+    frameNames.sort()
+
+    frame0 = cv.imread(folderPath + '/' + frameNames[0])
+    height, width = frame0.shape[:2]
+
+    fourcc = cv.VideoWriter_fourcc('M', 'J', 'P', 'G')
+    output = cv.VideoWriter(outputPath, fourcc, fps, (int(width), int(height)))
+
+    # Lets find the ratio to scale the velocities to be able to view them
+    maxLenght = 1
+    for COMV in COMVs:
+        VXN, VYN, length = COMV
+        currentMaxLength = np.max(length)
+        if currentMaxLength > maxLenght: maxLenght = currentMaxLength
+    ratio = 60 / maxLenght
+
+    amountOfFrames = len(frameNames)
+    for frameIdx, frameName in enumerate(frameNames):
+        # The velocity is invalid for the final frame
+        if frameIdx >= amountOfFrames - 2: continue
+        frame = cv.imread(folderPath + '/' + frameName)
+
+        for fishIdx, COMV in enumerate(COMVs):
+            VXN, VYN, length = COMV
+
+            comx = fishData[frameIdx, fishIdx, 0, 2]
+            comy = fishData[frameIdx, fishIdx, 1, 2]
+
+            # comx = smoothXs[2]
+            # comy = smoothYs[2][frameIdx]
+            comx = int(comx)
+            comy = int(comy)
+
+            xoffset = int(ratio * length[frameIdx]  * VXN[frameIdx])
+            yoffset = int(ratio * length[frameIdx]  * VYN[frameIdx])
+
+            # xoffset = int(ratio * VXN[frameIdx])
+            # yoffset = int(ratio * VYN[frameIdx])
+
+            frame = cv.arrowedLine(frame, (comx, comy), (comx + xoffset, comy + yoffset), (255,255,0), 3, 5, 0, .5)
+        output.write(frame)
+
+    output.release()
+
 def array2XL(array, outputPath):
     workbook = xlsxwriter.Workbook(outputPath)
     worksheet = workbook.add_worksheet()
@@ -468,8 +579,22 @@ class ProgressDialog(QDialog):
             np.save(self.saveDirectory + '/' + filefolderName + '.npy', fishData)
         elif self.outputMode == ProgressDialog.VIDEO:
             folderAndArray2Video(folderPath, fishData, self.saveDirectory + '/' + filefolderName + '.avi' )
+            # Lets create the velocity too
+            COMVs = array2Velocity(fishData)
+            # NOTE: Temporary
+            np.save(self.saveDirectory + '/' + filefolderName + '_velocities.npy', np.array(COMVs))
+            folderAndVelocities2Video(folderPath, COMVs, fishData,
+                                      self.saveDirectory + '/' + filefolderName + '_velocity.avi')
         elif self.outputMode == ProgressDialog.EXCEL:
-            array2XL(fishData, self.saveDirectory + '/' + filefolderName + '.xlsx')
+            #array2XL(fishData, self.saveDirectory + '/' + filefolderName + '.xlsx')
+            COMVs = array2Velocity(fishData)
+            COMVs = np.array(COMVs)
+            # We do not care about cc for PREDICTION mode, lets just pass in zeros to the function
+            amountOfFrames = COMVs.shape[2]
+            amountOfFish = COMVs.shape[0]
+            ccData = np.ones((amountOfFrames, amountOfFish))
+            velocityArray2XL(COMVs, ccData, self.saveDirectory + '/' + filefolderName + '_velocities.xlsx')
+
 
     def predictForFrames(self, images, grid):
 
@@ -733,6 +858,15 @@ class ProgressDialog(QDialog):
             np.save(self.saveDirectory + '/' + filefolderName + '_cc.npy', ccData)
         elif self.outputMode == ProgressDialog.EXCEL:
             array2XL(fishData, self.saveDirectory + '/' + filefolderName + '.xlsx')
+            COMVs = array2Velocity(fishData)
+            COMVs = np.array(COMVs)
+            if self.ccMode == ProgressDialog.CLIPCC:
+                velocityArray2XL(COMVs, ccData,
+                        self.saveDirectory + '/' + filefolderName + '_velocity.xlsx', threshold= self.cutOffThreshold )
+            else:
+                velocityArray2XL(COMVs, ccData,
+                                 self.saveDirectory + '/' + filefolderName + '_velocity.xlsx', threshold = -1)
+
 
     def predictForFramesWithCCThreshold(self, images, grid):
 
