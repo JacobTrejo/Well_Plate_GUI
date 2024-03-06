@@ -20,5 +20,7 @@ GUI_Pages/velocities2Excel.py
 GUI_Pages/velocitiesData.npy
 GUI_Pages/velocityData.npy
 GUI_Pages/VideoPlayerAndGraph.py
-outputs/demo
+outputs/demo/test_200_frames_1_24_24_velocity.avi
+outputs/demo/test_200_frames_1_24_24_velocities.npy
+outputs/demo/test_200_frames_1_24_24.avi
 outputs/smallGridDemo
