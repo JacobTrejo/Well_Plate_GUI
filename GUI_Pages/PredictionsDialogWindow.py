@@ -22,7 +22,7 @@ from GUI_Pages.VideoPlayer5 import Widget
 from GUI_Pages.VideoPlayerFolders2 import FolderVideoPlayer
 from PyQt5 import QtCore, QtGui
 import os
-from GUI_Pages.bgsub import bgsub, bgsubFolder
+from GUI_Pages.bgsub import bgsub, bgsubFolder, bgsubFiles
 import time
 import math
 from multiprocessing import Pool, Manager
@@ -95,9 +95,12 @@ def velocityArray2XL(array, ccData, outputPath, threshold = .4):
 
     workbook.close()
 
+
+
 def folderAndVelocities2Video(folderPath, COMVs, fishData, outputPath, fps = 50):
     frameNames = os.listdir(folderPath)
     frameNames.sort()
+    frameNames = frameNames[:1000] # temporary
 
     frame0 = cv.imread(folderPath + '/' + frameNames[0])
     height, width = frame0.shape[:2]
@@ -173,6 +176,8 @@ def array2XL(array, outputPath):
 def folderAndArray2Video(folderPath, array, outputPath):
     frameFiles = os.listdir(folderPath)
     frameFiles.sort()
+    frameFiles = frameFiles[:1000]
+
     frame0 = cv.imread(folderPath + '/' + frameFiles[0])
     height, width = frame0.shape[:2]
     isGray = (frame0.ndim == 2)
@@ -534,10 +539,117 @@ class ProgressDialog(QDialog):
             if os.path.isfile(videoPath):
                 self.predict4VideoFile(videoPath, grid)
             elif os.path.isdir(videoPath):
-                self.predict4Folder(videoPath, grid)
+                #self.predict4Folder(videoPath, grid)
+                self.predict4Folder2(videoPath, grid)
 
     def predict4VideoFile(self, videoPath, grid):
         print('You predicted for the video')
+
+    def predict4Folder2(self, folderPath, grid):
+        superBatchSize = 1000 # This is the batch size which will control the size we are bgsub
+
+        fileFolderSplit = folderPath.split('/')[-1]
+        filefolderName = fileFolderSplit.split('.')[0]
+
+        filenames = os.listdir(folderPath)
+        filenames.sort()
+        filenames = filenames[:2000]  # Temporary to test out the result
+        amountOfImages = len(filenames)
+        self.progressBar.setRange(0, amountOfImages - 1)
+        if amountOfImages < superBatchSize: superBatchSize = amountOfImages
+
+        amountOfCircles = len(grid)
+        fishData = np.zeros((amountOfImages, amountOfCircles, 2, 12))
+
+        amountOfSuperBatches = int(np.ceil(amountOfImages / superBatchSize))
+        startingFrameIdx = 0
+        for superBatchSizeIdx in range(amountOfSuperBatches - 1):
+            filenamesBatch = filenames[superBatchSizeIdx * superBatchSize: (superBatchSizeIdx + 1) * superBatchSize]
+            bgsubList = bgsubFiles(filenamesBatch, folderPath)
+
+            # Analyzing the data in batches
+            batchsize = 100
+            amountOfBatches = int(np.ceil(superBatchSize / batchsize))
+
+            for batchIdx in range(amountOfBatches - 1):
+                startingFrame = batchIdx * batchsize
+                endingFrame = (batchIdx + 1) * batchsize
+                fishDataInstance = self.predictForFrames(bgsubList[startingFrame:endingFrame], grid)
+
+                superStartingFrame = (superBatchSizeIdx * superBatchSize) + startingFrame
+                superEndingFrame = (superBatchSizeIdx * superBatchSize) + endingFrame
+
+                fishData[superStartingFrame: superEndingFrame] = fishDataInstance
+
+                self.progressBar.setValue(endingFrame)
+                self.update()
+                QApplication.processEvents()
+
+            # The final batch
+            startingFrame = (amountOfBatches - 1) * batchsize
+            superStartingFrame = (superBatchSizeIdx * batchsize) + startingFrame
+            superEndingFrame = (superBatchSizeIdx + 1) * batchsize
+            fishDataInstance = self.predictForFrames(bgsubList[startingFrame:], grid)
+            fishData[superStartingFrame:superStartingFrame + len(bgsubList[startingFrame:])] = fishDataInstance
+            self.progressBar.setValue(superEndingFrame)
+            # self.progressLabel.setText('Done')
+            self.update()
+            QApplication.processEvents()
+        # The Final Super Batch
+        filenamesBatch = filenames[-superBatchSize:]
+        bgsubList = bgsubFiles(filenamesBatch, folderPath)
+        amountLeftOver = amountOfImages - ((amountOfSuperBatches - 1) * superBatchSize)
+        bgsubList = bgsubList[-amountLeftOver:]
+
+        amountOfBatches = int(np.ceil(len(bgsubList) / batchsize))
+
+        for batchIdx in range(amountOfBatches - 1):
+            startingFrame = batchIdx * batchsize
+            endingFrame = (batchIdx + 1) * batchsize
+            fishDataInstance = self.predictForFrames(bgsubList[startingFrame:endingFrame], grid)
+
+            superStartingFrame = ((amountOfSuperBatches - 1) * superBatchSize) + startingFrame
+            superEndingFrame = ((amountOfSuperBatches - 1) * superBatchSize) + endingFrame
+
+            fishData[superStartingFrame: superEndingFrame] = fishDataInstance
+
+            self.progressBar.setValue(superEndingFrame)
+            self.update()
+            QApplication.processEvents()
+
+        # The final, final batch >_<
+        startingFrame = (amountOfBatches - 1) * batchsize
+        superStartingFrame = ((amountOfSuperBatches - 1) * superBatchSize) + startingFrame
+        # superEndingFrame = (superBatchSizeIdx + 1) * batchsize
+        fishDataInstance = self.predictForFrames(bgsubList[startingFrame:], grid)
+        fishData[superStartingFrame:] = fishDataInstance
+        self.progressBar.setValue(amountOfImages)
+        self.progressLabel.setText('Done')
+        self.update()
+        QApplication.processEvents()
+
+
+        # Saving the data appropriately
+        if self.outputMode == ProgressDialog.NUMPY:
+            np.save(self.saveDirectory + '/' + filefolderName + '.npy', fishData)
+        elif self.outputMode == ProgressDialog.VIDEO:
+            folderAndArray2Video(folderPath, fishData, self.saveDirectory + '/' + filefolderName + '.avi' )
+            # Lets create the velocity too
+            COMVs = array2Velocity(fishData)
+            # NOTE: Temporary
+            np.save(self.saveDirectory + '/' + filefolderName + '_velocities.npy', np.array(COMVs))
+            folderAndVelocities2Video(folderPath, COMVs, fishData,
+                                      self.saveDirectory + '/' + filefolderName + '_velocity.avi')
+        elif self.outputMode == ProgressDialog.EXCEL:
+            #array2XL(fishData, self.saveDirectory + '/' + filefolderName + '.xlsx')
+            COMVs = array2Velocity(fishData)
+            COMVs = np.array(COMVs)
+            # We do not care about cc for PREDICTION mode, lets just pass in zeros to the function
+            amountOfFrames = COMVs.shape[2]
+            amountOfFish = COMVs.shape[0]
+            ccData = np.ones((amountOfFrames, amountOfFish))
+            velocityArray2XL(COMVs, ccData, self.saveDirectory + '/' + filefolderName + '_velocities.xlsx')
+
 
     def predict4Folder(self, folderPath, grid):
         fileFolderSplit = folderPath.split('/')[-1]
@@ -796,10 +908,154 @@ class ProgressDialog(QDialog):
             if os.path.isfile(videoPath):
                 self.predict4VideoFileWithCC(videoPath, grid)
             elif os.path.isdir(videoPath):
-                self.predict4FolderWithCC(videoPath, grid)
+                self.predict4FolderWithCC2(videoPath, grid)
 
     def predict4VideoFileWithCC(self, videoPath, grid):
         print('You predicted for the video')
+
+    def predict4FolderWithCC2(self, folderPath, grid):
+        superBatchSize = 1000 # This is the batch size which will control the size we are bgsub
+        batchsize = 100
+
+        fileFolderSplit = folderPath.split('/')[-1]
+        filefolderName = fileFolderSplit.split('.')[0]
+
+        filenames = os.listdir(folderPath)
+        filenames.sort()
+        filenames = filenames[:1000]  # Temporary to test out the result
+        amountOfImages = len(filenames)
+        self.progressBar.setRange(0, amountOfImages - 1)
+        if amountOfImages < superBatchSize: superBatchSize = amountOfImages
+
+        amountOfCircles = len(grid)
+        fishData = np.zeros((amountOfImages, amountOfCircles, 2, 12))
+        ccData = np.zeros((amountOfImages, amountOfCircles))
+
+
+        amountOfSuperBatches = int(np.ceil(amountOfImages / superBatchSize))
+        startingFrameIdx = 0
+        for superBatchSizeIdx in range(amountOfSuperBatches - 1):
+            filenamesBatch = filenames[superBatchSizeIdx * superBatchSize: (superBatchSizeIdx + 1) * superBatchSize]
+            bgsubList = bgsubFiles(filenamesBatch, folderPath)
+
+            # Analyzing the data in batches
+            amountOfBatches = int(np.ceil(superBatchSize / batchsize))
+
+            for batchIdx in range(amountOfBatches - 1):
+                startingFrame = batchIdx * batchsize
+                endingFrame = (batchIdx + 1) * batchsize
+
+                #fishDataInstance = self.predictForFrames(bgsubList[startingFrame:endingFrame], grid)
+
+                if self.ccMode == ProgressDialog.CLIPCC:
+                    fishDataInstance, ccDataInstance = self.predictForFramesWithCCThreshold(
+                        bgsubList[startingFrame: endingFrame], grid)
+                else:
+                    fishDataInstance, ccDataInstance = self.predictForFramesWithCCNoThreshold(
+                        bgsubList[startingFrame: endingFrame], grid)
+
+                superStartingFrame = (superBatchSizeIdx * superBatchSize) + startingFrame
+                superEndingFrame = (superBatchSizeIdx * superBatchSize) + endingFrame
+
+                fishData[superStartingFrame: superEndingFrame] = fishDataInstance
+                ccData[superStartingFrame: superEndingFrame] = fishDataInstance
+
+                self.progressBar.setValue(endingFrame)
+                self.update()
+                QApplication.processEvents()
+
+            # The final batch
+            startingFrame = (amountOfBatches - 1) * batchsize
+            superStartingFrame = (superBatchSizeIdx * batchsize) + startingFrame
+            superEndingFrame = (superBatchSizeIdx + 1) * batchsize
+
+            # fishDataInstance = self.predictForFrames(bgsubList[startingFrame:], grid)
+            if self.ccMode == ProgressDialog.CLIPCC:
+                fishDataInstance, ccDataInstance = self.predictForFramesWithCCThreshold(
+                    bgsubList[startingFrame: ], grid)
+            else:
+                fishDataInstance, ccDataInstance = self.predictForFramesWithCCNoThreshold(
+                    bgsubList[startingFrame: ], grid)
+
+            fishData[superStartingFrame:superStartingFrame + len(bgsubList[startingFrame:])] = fishDataInstance
+            ccData[superStartingFrame:superStartingFrame + len(bgsubList[startingFrame:])] = ccDataInstance
+
+            self.progressBar.setValue(superEndingFrame)
+            # self.progressLabel.setText('Done')
+            self.update()
+            QApplication.processEvents()
+        # The Final Super Batch
+        filenamesBatch = filenames[-superBatchSize:]
+        bgsubList = bgsubFiles(filenamesBatch, folderPath)
+        amountLeftOver = amountOfImages - ((amountOfSuperBatches - 1) * superBatchSize)
+        bgsubList = bgsubList[-amountLeftOver:]
+
+        amountOfBatches = int(np.ceil(len(bgsubList) / batchsize))
+
+        for batchIdx in range(amountOfBatches - 1):
+            startingFrame = batchIdx * batchsize
+            endingFrame = (batchIdx + 1) * batchsize
+
+            if self.ccMode == ProgressDialog.CLIPCC:
+                fishDataInstance, ccDataInstance = self.predictForFramesWithCCThreshold(
+                    bgsubList[startingFrame: endingFrame], grid)
+            else:
+                fishDataInstance, ccDataInstance = self.predictForFramesWithCCNoThreshold(
+                    bgsubList[startingFrame: endingFrame], grid)
+
+
+            superStartingFrame = ((amountOfSuperBatches - 1) * superBatchSize) + startingFrame
+            superEndingFrame = ((amountOfSuperBatches - 1) * superBatchSize) + endingFrame
+
+            fishData[superStartingFrame: superEndingFrame] = fishDataInstance
+            ccData[superStartingFrame: superEndingFrame] = ccDataInstance
+
+            self.progressBar.setValue(superEndingFrame)
+            self.update()
+            QApplication.processEvents()
+
+        # The final, final batch >_<
+        startingFrame = (amountOfBatches - 1) * batchsize
+        superStartingFrame = ((amountOfSuperBatches - 1) * superBatchSize) + startingFrame
+        # superEndingFrame = (superBatchSizeIdx + 1) * batchsize
+
+        if self.ccMode == ProgressDialog.CLIPCC:
+            fishDataInstance, ccDataInstance = self.predictForFramesWithCCThreshold(
+                bgsubList[startingFrame: ], grid)
+        else:
+            fishDataInstance, ccDataInstance = self.predictForFramesWithCCNoThreshold(
+                bgsubList[startingFrame: ], grid)
+
+        fishData[superStartingFrame:] = fishDataInstance
+        ccData[superStartingFrame:] = ccDataInstance
+        self.progressBar.setValue(amountOfImages)
+        self.progressLabel.setText('Done')
+        self.update()
+        QApplication.processEvents()
+
+
+        # Saving the data appropriately
+        if self.outputMode == ProgressDialog.NUMPY:
+            np.save(self.saveDirectory + '/' + filefolderName + '.npy', fishData)
+        elif self.outputMode == ProgressDialog.VIDEO:
+            folderAndArray2Video(folderPath, fishData, self.saveDirectory + '/' + filefolderName + '.avi' )
+            # Lets create the velocity too
+            COMVs = array2Velocity(fishData)
+            # NOTE: Temporary
+            np.save(self.saveDirectory + '/' + filefolderName + '_velocities.npy', np.array(COMVs))
+            folderAndVelocities2Video(folderPath, COMVs, fishData,
+                                      self.saveDirectory + '/' + filefolderName + '_velocity.avi')
+        elif self.outputMode == ProgressDialog.EXCEL:
+            #array2XL(fishData, self.saveDirectory + '/' + filefolderName + '.xlsx')
+            COMVs = array2Velocity(fishData)
+            COMVs = np.array(COMVs)
+            # We do not care about cc for PREDICTION mode, lets just pass in zeros to the function
+            amountOfFrames = COMVs.shape[2]
+            amountOfFish = COMVs.shape[0]
+            ccData = np.ones((amountOfFrames, amountOfFish))
+            velocityArray2XL(COMVs, ccData, self.saveDirectory + '/' + filefolderName + '_velocities.xlsx')
+
+
 
     def predict4FolderWithCC(self, folderPath, grid):
         fileFolderSplit = folderPath.split('/')[-1]

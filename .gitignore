@@ -23,4 +23,6 @@ GUI_Pages/VideoPlayerAndGraph.py
 outputs/demo/test_200_frames_1_24_24_velocity.avi
 outputs/demo/test_200_frames_1_24_24_velocities.npy
 outputs/demo/test_200_frames_1_24_24.avi
+outputs/demo2
+outputs/demo3
 outputs/smallGridDemo
