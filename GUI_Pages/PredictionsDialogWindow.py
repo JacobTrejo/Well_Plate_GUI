@@ -547,13 +547,13 @@ class ProgressDialog(QDialog):
 
     def predict4Folder2(self, folderPath, grid):
         superBatchSize = 1000 # This is the batch size which will control the size we are bgsub
-
+        batchsize = 100
         fileFolderSplit = folderPath.split('/')[-1]
         filefolderName = fileFolderSplit.split('.')[0]
 
         filenames = os.listdir(folderPath)
         filenames.sort()
-        filenames = filenames[:2000]  # Temporary to test out the result
+        filenames = filenames[:1000]  # Temporary to test out the result
         amountOfImages = len(filenames)
         self.progressBar.setRange(0, amountOfImages - 1)
         if amountOfImages < superBatchSize: superBatchSize = amountOfImages
@@ -568,7 +568,6 @@ class ProgressDialog(QDialog):
             bgsubList = bgsubFiles(filenamesBatch, folderPath)
 
             # Analyzing the data in batches
-            batchsize = 100
             amountOfBatches = int(np.ceil(superBatchSize / batchsize))
 
             for batchIdx in range(amountOfBatches - 1):

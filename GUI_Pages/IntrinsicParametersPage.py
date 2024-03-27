@@ -1220,7 +1220,8 @@ class AnnotationsDialog(QDialog):
                 newData = self.getDataFromVideo(vid)
                 data = data + newData
             elif os.path.isdir(videoName):
-                newData = self.getDataFromFolder(vid)
+                # newData = self.getDataFromFolder(vid)
+                newData = self.getDataFromFolder2(vid)
                 data = data + newData
 
         for el in data:
@@ -1276,7 +1277,9 @@ class AnnotationsDialog(QDialog):
                 newData = self.getDataFromVideo(vid)
                 data = data + newData
             elif os.path.isdir(videoName):
-                newData = self.getDataFromFolder(vid)
+                # newData = self.getDataFromFolder(vid)
+                newData = self.getDataFromFolder2(vid)
+
                 data = data + newData
         # Getting the calculations on the data
         xVectors = np.array([])
@@ -1374,6 +1377,59 @@ class AnnotationsDialog(QDialog):
 
             data.append((cutOut, points))
         return data
+
+    def getDataFromFolder2(self, vid):
+        folderName = vid[0][0]
+        data = []
+        windowSize = 1000
+
+        # bgsubVid = bgsubFolder(folderName)
+        files = os.listdir(folderName)
+        files.sort()
+        amountOfFrames = len(files)
+
+        for labelData in vid:
+            _, frameIdx, crops, points = labelData
+
+            # Lets compute the starting index of the window
+            halfWindowSize = int(windowSize // 2)
+            isLeftOutOfBounds = True if halfWindowSize > frameIdx else False
+            isRightOutOfBounds = True if frameIdx + halfWindowSize > amountOfFrames - 1 else False
+            if isLeftOutOfBounds and isRightOutOfBounds:
+                startIdx = 0
+                endIdx = amountOfFrames
+            elif isLeftOutOfBounds:
+                startIdx = 0
+                endIdx = 0 + windowSize
+                endIdx = np.clip(endIdx, None, amountOfFrames - 1)
+            elif isRightOutOfBounds:
+                endIdx = amountOfFrames - 1
+                startIdx = endIdx - windowSize
+                startIdx = np.clip(startIdx, 0, None)
+            else:
+                startIdx = frameIdx - halfWindowSize
+                endIdx = frameIdx + halfWindowSize
+            tempFiles = files[startIdx: endIdx + 1]
+
+            bgsubVid = bgsubFiles(tempFiles,folderName)
+
+            sy, by, sx, bx = crops
+            cutOut = (bgsubVid[frameIdx - startIdx])[sy: by + 1, sx: bx + 1]
+
+            # Normalizing the image
+            cutoutMaxValue = np.max(cutOut)
+            cutOut = cutOut.astype(float)
+            cutOut *= 255 / cutoutMaxValue
+            cutOut = cutOut.astype(np.uint8)
+            # cv.imwrite('temp.png', cutOut)
+            # print('points: ', points)
+            sizeY, sizeX = cutOut.shape[:2]
+            points[0] = [points[0][0] * sizeX, points[0][1] * sizeY]
+            points[1] = [points[1][0] * sizeX, points[1][1] * sizeY]
+
+            data.append((cutOut, points))
+        return data
+
 
     def markAnnotationsPressed(self):
         if not self.previousAnnotationLabel: return
