@@ -314,6 +314,11 @@ def regressionSmoothing(interpFish, windowSize = 5, fps = 50):
     xSpeeds = []
     ySpeeds = []
     for xy, yy in zip(xYs, yYs):
+        if np.any(np.isnan(xy)) or np.any(np.isnan(yy)):
+            xSpeeds.append(np.nan)
+            ySpeeds.append(np.nan)
+            continue
+
         reg = LinearRegression().fit(xs, xy)
         xSpeed = (reg.coef_)[0]
         xSpeeds.append(xSpeed)
@@ -332,7 +337,76 @@ def regressionSmoothing(interpFish, windowSize = 5, fps = 50):
 
     return xSpeeds2, ySpeeds2
 
+def regressionSmoothingWithCC(interpFish, fishIdx, ccData, windowSize = 5, fps = 50, threshold = .7):
+    firstFishInterp = np.copy(interpFish)
 
+    firstFishXInterp = firstFishInterp[:, 0]
+    firstFishYInterp = firstFishInterp[:, 1]
+
+    # Linear Regression Smoothing
+
+    # windowSize = 5
+    offsetFromCenter = (windowSize - 1) // 2
+
+    choppedfirstFishXInterp = firstFishXInterp[offsetFromCenter:-offsetFromCenter]
+    choppedfirstFishYInterp = firstFishYInterp[offsetFromCenter:-offsetFromCenter]
+
+    amountOfDataPoints = len(firstFishXInterp)
+    amountOfPointsToCompute = amountOfDataPoints - (2 * offsetFromCenter)
+
+    DT = (1 / fps)
+    X = np.arange(0, windowSize)
+
+    # Getting the ys and xs, also getting the speed from that
+
+    x_ = np.matlib.repmat(X, amountOfPointsToCompute, 1)
+    # x_ = np.squeeze(x_)
+    # x_ = x_.reshape(-1, 3)
+    offset = np.arange(x_.shape[0])
+    # offset = offset.reshape(1, -1)
+    offset = np.stack([offset for _ in range(windowSize)], axis=1)
+    indices = x_ + offset
+    # print(indices[0])
+    # print(indices[1])
+    # reshaping them to be able to get all of the values at once
+    indices = indices.reshape(-1, 1)
+    indices = np.squeeze(indices)
+    xYs = firstFishXInterp[indices]
+    yYs = firstFishYInterp[indices]
+    xYs = xYs.reshape(-1, windowSize)
+    yYs = yYs.reshape(-1, windowSize)
+
+    xs = (X + 1) * DT
+    xs = xs.reshape(-1, 1)  # Got to reshape it into the certain format
+    xSpeeds = []
+    ySpeeds = []
+
+    for frameIdx, (xy, yy) in enumerate(zip(xYs, yYs)):
+        frameIdx += offsetFromCenter
+
+        ccs = ccData[frameIdx - offsetFromCenter: frameIdx + offsetFromCenter + 1, fishIdx]
+        if np.any(ccs < threshold) or np.any(np.isnan(xy)) or np.any(np.isnan(yy)):
+            xSpeeds.append(np.nan)
+            ySpeeds.append(np.nan)
+            continue
+
+        reg = LinearRegression().fit(xs, xy)
+        xSpeed = (reg.coef_)[0]
+        xSpeeds.append(xSpeed)
+
+        reg = LinearRegression().fit(xs, yy)
+        ySpeed = (reg.coef_)[0]
+        ySpeeds.append(ySpeed)
+
+    pads = []
+    for _ in range(offsetFromCenter): pads.append(0)
+    xSpeeds2 = pads + xSpeeds + pads
+    ySpeeds2 = pads + ySpeeds + pads
+
+    xSpeeds2 = np.array(xSpeeds2)
+    ySpeeds2 = np.array(ySpeeds2)
+
+    return xSpeeds2, ySpeeds2
 
 
 

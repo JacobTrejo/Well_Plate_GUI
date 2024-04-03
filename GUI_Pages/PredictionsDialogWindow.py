@@ -27,7 +27,7 @@ import time
 import math
 from multiprocessing import Pool, Manager
 from GUI_Pages.CalculateCC.evaluation_functions import evaluate_prediction
-from GUI_Pages.evaluation_functions import interpolatePts, regressionSmoothing
+from GUI_Pages.evaluation_functions import interpolatePts, regressionSmoothing, regressionSmoothingWithCC
 
 import xlsxwriter
 
@@ -41,6 +41,28 @@ def array2RegVelocity(fishData, fps = 50, windowSize = 5):
         Ys = fishData[:, fishIdx, 1, 2]
 
         vx, vy = regressionSmoothing(fishData[:,fishIdx,:,2], windowSize, fps )
+
+        length = (vx ** 2 + vy ** 2) ** .5
+        vx[offsetFromCenter:-offsetFromCenter] =\
+            vx[offsetFromCenter:-offsetFromCenter] / length[offsetFromCenter:-offsetFromCenter]
+
+        vy[offsetFromCenter:-offsetFromCenter] = \
+            vy[offsetFromCenter:-offsetFromCenter] / length[offsetFromCenter:-offsetFromCenter]
+
+        COMVs.append((vx, vy, length))
+
+    return COMVs
+
+def array2RegVelocityWithCC(fishData, ccData, fps = 50, windowSize = 5, threshold = .7):
+    offsetFromCenter = int((windowSize - 1) // 2)
+    COMVs = []
+
+    for fishIdx in range(fishData.shape[1]):
+
+        Xs = fishData[:, fishIdx, 0, 2]
+        Ys = fishData[:, fishIdx, 1, 2]
+
+        vx, vy = regressionSmoothingWithCC(fishData[:,fishIdx,:,2], fishIdx, ccData, windowSize, fps, threshold)
 
         length = (vx ** 2 + vy ** 2) ** .5
         vx[offsetFromCenter:-offsetFromCenter] =\
@@ -123,7 +145,7 @@ def velocityArray2XL(array, ccData, outputPath, threshold = .4):
 def folderAndVelocities2Video(folderPath, COMVs, fishData, outputPath, fps = 50):
     frameNames = os.listdir(folderPath)
     frameNames.sort()
-    frameNames = frameNames[:1000] # temporary
+    # frameNames = frameNames[:100] # temporary
 
     frame0 = cv.imread(folderPath + '/' + frameNames[0])
     height, width = frame0.shape[:2]
@@ -153,12 +175,14 @@ def folderAndVelocities2Video(folderPath, COMVs, fishData, outputPath, fps = 50)
 
             # comx = smoothXs[2]
             # comy = smoothYs[2][frameIdx]
-            comx = int(comx)
-            comy = int(comy)
-
-            xoffset = int(ratio * length[frameIdx]  * VXN[frameIdx])
-            yoffset = int(ratio * length[frameIdx]  * VYN[frameIdx])
-
+            try:
+                comx = int(comx)
+                comy = int(comy)
+                xoffset = int(ratio * length[frameIdx] * VXN[frameIdx])
+                yoffset = int(ratio * length[frameIdx] * VYN[frameIdx])
+            except:
+                continue
+            if np.any( np.isnan(np.array([comx, comy, xoffset, yoffset])) ): continue
             # xoffset = int(ratio * VXN[frameIdx])
             # yoffset = int(ratio * VYN[frameIdx])
 
@@ -576,7 +600,7 @@ class ProgressDialog(QDialog):
 
         filenames = os.listdir(folderPath)
         filenames.sort()
-        filenames = filenames[:1000]  # Temporary to test out the result
+        # filenames = filenames[:1000]  # Temporary to test out the result
         amountOfImages = len(filenames)
         self.progressBar.setRange(0, amountOfImages - 1)
         if amountOfImages < superBatchSize: superBatchSize = amountOfImages
@@ -647,6 +671,14 @@ class ProgressDialog(QDialog):
         # superEndingFrame = (superBatchSizeIdx + 1) * batchsize
         fishDataInstance = self.predictForFrames(bgsubList[startingFrame:], grid)
         fishData[superStartingFrame:] = fishDataInstance
+
+        interpacFishData[..., 10:] = fishData[..., 10:]
+        # Lets interpolate the data
+        for frameIdx in range(amountOfImages):
+            for fishIdx in range(amountOfCircles):
+                interpPoints = interpolatePts(fishData[frameIdx, fishIdx, ...])
+                interpacFishData[frameIdx, fishIdx, :, :10] = interpPoints[:, :10]
+
         self.progressBar.setValue(amountOfImages - 1)
         self.progressLabel.setText('Done')
         self.update()
@@ -658,36 +690,32 @@ class ProgressDialog(QDialog):
             np.save(self.saveDirectory + '/' + filefolderName + '.npy', fishData)
         elif self.outputMode == ProgressDialog.VIDEO:
 
-            # Lets interpolate the data
-            # Lets interpolate the data
-            for frameIdx in range(amountOfImages):
-                for fishIdx in range(amountOfCircles):
-                    interpPoints = interpolatePts(fishData[frameIdx, fishIdx, ...])
-                    interpacFishData[frameIdx, fishIdx, :, :10] = interpPoints[:, :10]
-
 
             folderAndArray2Video(folderPath, interpacFishData, self.saveDirectory + '/' + filefolderName + '.avi' )
 
 
             # Lets create the velocity too
             # COMVs = array2Velocity(fishData)
-            COMVs = array2RegVelocity(fishData)
+            # COMVs = array2RegVelocity(fishData)
+            COMVs = array2RegVelocity(interpacFishData)
+
             # NOTE: Temporary
             np.save(self.saveDirectory + '/' + filefolderName + '_velocities.npy', np.array(COMVs))
-            folderAndVelocities2Video(folderPath, COMVs, fishData,
+            folderAndVelocities2Video(folderPath, COMVs, interpacFishData,
                                       self.saveDirectory + '/' + filefolderName + '_velocity.avi')
         elif self.outputMode == ProgressDialog.EXCEL:
 
-            # Lets interpolate the data
-            for frameIdx in range(amountOfImages):
-                for fishIdx in range(amountOfCircles):
-                    interpPoints = interpolatePts(fishData[frameIdx, fishIdx, ...])
-                    interpacFishData[frameIdx, fishIdx, :, :10] = interpPoints[:, :10]
+            # # Lets interpolate the data
+            # for frameIdx in range(amountOfImages):
+            #     for fishIdx in range(amountOfCircles):
+            #         interpPoints = interpolatePts(fishData[frameIdx, fishIdx, ...])
+            #         interpacFishData[frameIdx, fishIdx, :, :10] = interpPoints[:, :10]
 
             # Lets smooth them now
 
             #array2XL(fishData, self.saveDirectory + '/' + filefolderName + '.xlsx')
-            COMVs = array2Velocity(fishData)
+            # COMVs = array2Velocity(fishData)
+            COMVs = array2Velocity(interpacFishData)
             COMVs = np.array(COMVs)
             # We do not care about cc for PREDICTION mode, lets just pass in zeros to the function
             amountOfFrames = COMVs.shape[2]
@@ -967,7 +995,7 @@ class ProgressDialog(QDialog):
 
         filenames = os.listdir(folderPath)
         filenames.sort()
-        filenames = filenames[:1000]  # Temporary to test out the result
+        #filenames = filenames[:100]  # Temporary to test out the result
         amountOfImages = len(filenames)
         self.progressBar.setRange(0, amountOfImages - 1)
         if amountOfImages < superBatchSize: superBatchSize = amountOfImages
@@ -975,7 +1003,7 @@ class ProgressDialog(QDialog):
         amountOfCircles = len(grid)
         fishData = np.zeros((amountOfImages, amountOfCircles, 2, 12))
         ccData = np.zeros((amountOfImages, amountOfCircles))
-
+        interpacFishData = np.zeros(fishData.shape)
 
         amountOfSuperBatches = int(np.ceil(amountOfImages / superBatchSize))
         startingFrameIdx = 0
@@ -1078,27 +1106,51 @@ class ProgressDialog(QDialog):
         self.update()
         QApplication.processEvents()
 
+        interpacFishData[..., 10:] = fishData[..., 10:]
+        # Lets interpolate the data
+        for frameIdx in range(amountOfImages):
+            for fishIdx in range(amountOfCircles):
+                interpPoints = interpolatePts(fishData[frameIdx, fishIdx, ...])
+                interpacFishData[frameIdx, fishIdx, :, :10] = interpPoints[:, :10]
+
+        # Lets get the velocity
+        if self.ccMode == ProgressDialog.CLIPCC:
+            COMVs = array2RegVelocityWithCC(interpacFishData, ccData, threshold=self.cutOffThreshold)
+        else:
+            COMVs = array2RegVelocity(interpacFishData)
+        COMVs = np.array(COMVs)
 
         # Saving the data appropriately
         if self.outputMode == ProgressDialog.NUMPY:
-            np.save(self.saveDirectory + '/' + filefolderName + '.npy', fishData)
+            np.save(self.saveDirectory + '/' + filefolderName + '.npy', interpacFishData)
         elif self.outputMode == ProgressDialog.VIDEO:
-            folderAndArray2Video(folderPath, fishData, self.saveDirectory + '/' + filefolderName + '.avi' )
+            folderAndArray2Video(folderPath, interpacFishData, self.saveDirectory + '/' + filefolderName + '.avi' )
             # Lets create the velocity too
-            COMVs = array2Velocity(fishData)
+            # COMVs = array2Velocity(fishData)
+            # COMVs = array2RegVelocity(interpacFishData)
+            # COMVs = array2RegVelocityWithCC(interpacFishData, ccData, threshold=self.cutOffThreshold)
             # NOTE: Temporary
-            np.save(self.saveDirectory + '/' + filefolderName + '_velocities.npy', np.array(COMVs))
-            folderAndVelocities2Video(folderPath, COMVs, fishData,
+            np.save(self.saveDirectory + '/' + filefolderName + '_velocities.npy', COMVs)
+            folderAndVelocities2Video(folderPath, COMVs, interpacFishData,
                                       self.saveDirectory + '/' + filefolderName + '_velocity.avi')
         elif self.outputMode == ProgressDialog.EXCEL:
             #array2XL(fishData, self.saveDirectory + '/' + filefolderName + '.xlsx')
-            COMVs = array2Velocity(fishData)
-            COMVs = np.array(COMVs)
-            # We do not care about cc for PREDICTION mode, lets just pass in zeros to the function
+            # COMVs = array2RegVelocity(interpacFishData)
+            # # COMVs = array2Velocity(fishData)
+            # COMVs = np.array(COMVs)
+
             amountOfFrames = COMVs.shape[2]
             amountOfFish = COMVs.shape[0]
-            ccData = np.ones((amountOfFrames, amountOfFish))
-            velocityArray2XL(COMVs, ccData, self.saveDirectory + '/' + filefolderName + '_velocities.xlsx')
+
+            windowSize = 5
+            offsetFromCenter = (windowSize - 1) // 2
+            COMVs = COMVs[..., offsetFromCenter:-offsetFromCenter]
+
+            if self.ccMode == ProgressDialog.CLIPCC:
+                velocityArray2XL(COMVs, ccData, self.saveDirectory + '/' + filefolderName + '_velocities.xlsx', self.cutOffThreshold)
+            else:
+                ccData = np.ones((amountOfFrames, amountOfFish))
+                velocityArray2XL(COMVs, ccData, self.saveDirectory + '/' + filefolderName + '_velocities.xlsx')
 
 
 
